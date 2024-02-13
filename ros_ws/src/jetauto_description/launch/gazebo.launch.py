@@ -1,7 +1,12 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import (
+    ExecuteProcess,
+    IncludeLaunchDescription,
+    RegisterEventHandler,
+)
+from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 import xacro
@@ -26,15 +31,36 @@ def generate_launch_description():
             "depth_camera_name": depth_camera_name,
         },
     )
-    params = {
-        "robot_description": robot_description.toxml(),
-        "use_sim_time": use_sim_time,
-    }
+
     node_rsp = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
         output="screen",
-        parameters=[params],
+        parameters=[
+            {
+                "robot_description": robot_description.toxml(),
+                "use_sim_time": use_sim_time,
+            }
+        ],
+    )
+
+    node_joint_state_broadcaster = ExecuteProcess(
+        cmd=[
+            "ros2",
+            "control",
+            "load_controller",
+            "--set-state",
+            "active",
+            "joint_state_broadcaster",
+        ],
+        output="screen",
+    )
+
+    node_spawn_entity = Node(
+        package="gazebo_ros",
+        executable="spawn_entity.py",
+        arguments=["-topic", "robot_description", "-entity", "jetauto"],
+        output="screen",
     )
 
     node_gazebo = IncludeLaunchDescription(
@@ -44,16 +70,10 @@ def generate_launch_description():
                     get_package_share_directory("gazebo_ros"),
                     "launch",
                     "gazebo.launch.py",
-                )
+                ),
             ]
         ),
-    )
-
-    node_spawn_entity = Node(
-        package="gazebo_ros",
-        executable="spawn_entity.py",
-        arguments=["-topic", "robot_description", "-entity", "jetauto"],
-        output="screen",
+        launch_arguments={"verbose": "true", "s": "libgazebo_ros_factory.so"}.items(),
     )
 
     rviz_file = os.path.join(pkg_share, "rviz", "jetauto.rviz")
@@ -66,9 +86,20 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
-            node_rsp,
+            RegisterEventHandler(
+                event_handler=OnProcessExit(
+                    target_action=node_spawn_entity,
+                    on_exit=[node_joint_state_broadcaster],
+                )
+            ),
+            RegisterEventHandler(
+                event_handler=OnProcessExit(
+                    target_action=node_joint_state_broadcaster,
+                    on_exit=[node_rviz],
+                )
+            ),
             node_gazebo,
+            node_rsp,
             node_spawn_entity,
-            node_rviz,
         ]
     )

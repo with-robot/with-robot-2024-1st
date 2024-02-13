@@ -8,25 +8,26 @@
 - sudo apt update && sudo apt upgrade -y
 - sudo apt install ros-humble-desktop -y
 - sudo apt install ros-dev-tools -y
-- sudo apt install ros-humble-xacro
 - echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
 
 # Install Gazebo
 - sudo apt update && sudo apt upgrade -y
 - sudo apt install -y git python3-pip
+- sudo apt install ros-humble-xacro
 - sudo apt install -y python3-colcon-common-extensions \
 ros-humble-joint-state-publisher-gui \
 ros-humble-gazebo-plugins \
 ros-humble-joint-state-publisher \
 ros-humble-gazebo-ros
+- sudo apt install ros-humble-ros2-control \
+ros-humble-ros2-controllers \
+ros-humble-gazebo-ros2-control
+- sudo apt install ros-humble-diagnostic-updater
 
 # jetauto_description
-- cd ~/Workspace/ros_ws/src
-- ros2 pkg create --build-type ament_cmake jetauto_description
-- cd jetauto_description
-- mkdir config launch meshes urdf rviz worlds
+- copy meshes to ~/.gazebo/models/jetauto_description/meshes/
 
 # Run
-- killall -9 gzserver; colcon build; source install/setup.bash; ros2 launch jetauto_description rivz.launch.py
-- killall -9 gzserver; colcon build; source install/setup.bash; ros2 launch jetauto_description gazebo.launch.py world:=src/jetauto_description/worlds/construction.sdf
+- killall -9 gzserver robot_state_publisher; colcon build; source install/setup.bash; ros2 launch jetauto_description rviz.launch.py
+- killall -9 gzserver robot_state_publisher; colcon build; source install/setup.bash; ros2 launch jetauto_description gazebo.launch.py world:=src/jetauto_description/worlds/construction.sdf
 - ros2 run teleop_twist_keyboard teleop_twist_keyboard cmd_vel:=jetauto_car/cmd_vel
