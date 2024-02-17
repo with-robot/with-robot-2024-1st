@@ -1409,7 +1409,6 @@ GameObject:
   m_Component:
   - component: {fileID: 331101909}
   - component: {fileID: 331101911}
-  - component: {fileID: 331101910}
   m_Layer: 0
   m_Name: Arm Camera
   m_TagString: Untagged
@@ -1432,14 +1431,6 @@ Transform:
   m_Father: {fileID: 471620939}
   m_RootOrder: 14
   m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
---- !u!81 &331101910
-AudioListener:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 331101908}
-  m_Enabled: 1
 --- !u!20 &331101911
 Camera:
   m_ObjectHideFlags: 0
@@ -3306,7 +3297,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 68b5a76125e4b4424bfd070c27a54d99, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  unityControl: 1
+  unityControl: 0
   motorForce: 10
   maxAngle: 20
   viewFL: {fileID: 2008123195}
@@ -3435,7 +3426,7 @@ AudioListener:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 963194225}
-  m_Enabled: 1
+  m_Enabled: 0
 --- !u!20 &963194227
 Camera:
   m_ObjectHideFlags: 0
