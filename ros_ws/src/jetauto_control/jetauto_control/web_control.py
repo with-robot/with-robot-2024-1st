@@ -40,7 +40,6 @@ class JetautoWebControl(Node):
         # publish
         self.pub_jetauto_car.publish(self.jetauto_car)
         self.pub_jetauto_arm.publish(self.jetauto_arm)
-        self.get_logger().info(f"{self.jetauto_arm}")
 
 
 @app.route("/jetauto_car", methods=["PUT"])
