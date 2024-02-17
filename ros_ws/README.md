@@ -27,7 +27,7 @@ ros-humble-gazebo-ros2-control
 # jetauto_description
 - copy meshes to ~/.gazebo/models/jetauto_description/meshes/
 
-# ROS Run
+# Rviz Run
 - killall -9 gzserver robot_state_publisher; colcon build; source install/setup.bash; ros2 launch jetauto_description rviz.launch.py
 
 # Gazebo Run
@@ -36,3 +36,6 @@ ros-humble-gazebo-ros2-control
 
 # Unity Run
 - killall -9 gzserver robot_state_publisher; colcon build; source install/setup.bash; ros2 launch jetauto_description unity.launch.py
+
+# Control Run
+- killall -9 gzserver robot_state_publisher; colcon build; source install/setup.bash; ros2 launch jetauto_control web_control.launch.py
