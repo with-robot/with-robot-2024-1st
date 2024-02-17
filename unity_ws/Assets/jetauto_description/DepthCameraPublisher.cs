@@ -33,7 +33,6 @@ public class DepthCameraPublisher : MonoBehaviour
             ImageMsg img_raw = texture.ToImageMsg(new HeaderMsg());
             ros.Publish(topicName, img_raw);
 
-
             timeElapsed = 0;
         }
     }

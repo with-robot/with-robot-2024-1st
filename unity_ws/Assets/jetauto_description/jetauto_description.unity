@@ -653,7 +653,7 @@ WheelCollider:
   m_SuspensionDistance: 0.02
   m_ForceAppPointDistance: 0
   m_Mass: 1
-  m_WheelDampingRate: 0.03
+  m_WheelDampingRate: 0.25
   m_ForwardFriction:
     m_ExtremumSlip: 0.4
     m_ExtremumValue: 1
@@ -1399,6 +1399,90 @@ MeshCollider:
   m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 4300000, guid: f69285d123cdbd241a389ede3a998bc8, type: 2}
+--- !u!1 &331101908
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 331101909}
+  - component: {fileID: 331101911}
+  - component: {fileID: 331101910}
+  m_Layer: 0
+  m_Name: Arm Camera
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &331101909
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 331101908}
+  m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
+  m_LocalPosition: {x: 0, y: 0.2, z: 0.7}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 471620939}
+  m_RootOrder: 14
+  m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
+--- !u!81 &331101910
+AudioListener:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 331101908}
+  m_Enabled: 1
+--- !u!20 &331101911
+Camera:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 331101908}
+  m_Enabled: 1
+  serializedVersion: 2
+  m_ClearFlags: 1
+  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
+  m_projectionMatrixMode: 1
+  m_GateFitMode: 2
+  m_FOVAxisMode: 0
+  m_SensorSize: {x: 36, y: 24}
+  m_LensShift: {x: 0, y: 0}
+  m_FocalLength: 50
+  m_NormalizedViewPortRect:
+    serializedVersion: 2
+    x: 0
+    y: 0
+    width: 1
+    height: 1
+  near clip plane: 0.3
+  far clip plane: 1000
+  field of view: 60
+  orthographic: 0
+  orthographic size: 5
+  m_Depth: 0
+  m_CullingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_RenderingPath: -1
+  m_TargetTexture: {fileID: 0}
+  m_TargetDisplay: 1
+  m_TargetEye: 3
+  m_HDR: 1
+  m_AllowMSAA: 1
+  m_AllowDynamicResolution: 0
+  m_ForceIntoRT: 0
+  m_OcclusionCulling: 1
+  m_StereoConvergence: 10
+  m_StereoSeparation: 0.022
 --- !u!1 &370437226
 GameObject:
   m_ObjectHideFlags: 0
@@ -1621,6 +1705,7 @@ Transform:
   - {fileID: 370437227}
   - {fileID: 1196365202}
   - {fileID: 870268296}
+  - {fileID: 331101909}
   m_Father: {fileID: 1044508471}
   m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -2897,7 +2982,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7acef0b79454c9b4dae3f8139bc4ba77, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_RosIPAddress: 192.168.64.2
+  m_RosIPAddress: 192.168.128.5
   m_RosPort: 10000
   m_ConnectOnStart: 1
   m_KeepaliveTime: 1
@@ -3221,6 +3306,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 68b5a76125e4b4424bfd070c27a54d99, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  unityControl: 1
   motorForce: 10
   maxAngle: 20
   viewFL: {fileID: 2008123195}
@@ -3237,6 +3323,8 @@ MonoBehaviour:
   colliderFR: {fileID: 1402167470}
   colliderBL: {fileID: 1521689047}
   colliderBR: {fileID: 194010328}
+  jetauto_car_topic: jetauto_car/cmd_vel
+  jetauto_arm_topic: jetauto_arm/cmd_vel
 --- !u!114 &943785386
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6602,7 +6690,7 @@ WheelCollider:
   m_SuspensionDistance: 0.02
   m_ForceAppPointDistance: 0
   m_Mass: 1
-  m_WheelDampingRate: 0.03
+  m_WheelDampingRate: 0.25
   m_ForwardFriction:
     m_ExtremumSlip: 0.4
     m_ExtremumValue: 1
@@ -6673,7 +6761,7 @@ WheelCollider:
   m_SuspensionDistance: 0.02
   m_ForceAppPointDistance: 0
   m_Mass: 1
-  m_WheelDampingRate: 0.03
+  m_WheelDampingRate: 0.25
   m_ForwardFriction:
     m_ExtremumSlip: 0.4
     m_ExtremumValue: 1
@@ -6860,7 +6948,7 @@ WheelCollider:
   m_SuspensionDistance: 0.02
   m_ForceAppPointDistance: 0
   m_Mass: 1
-  m_WheelDampingRate: 0.03
+  m_WheelDampingRate: 0.25
   m_ForwardFriction:
     m_ExtremumSlip: 0.4
     m_ExtremumValue: 1

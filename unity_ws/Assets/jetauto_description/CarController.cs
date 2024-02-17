@@ -1,6 +1,7 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
+using Unity.Robotics.ROSTCPConnector;
+using RosMessageTypes.Geometry;
+using RosMessageTypes.Sensor;
 
 public class CarController : MonoBehaviour
 {
@@ -8,8 +9,11 @@ public class CarController : MonoBehaviour
     private const string HORIZONTAL = "Horizontal";
     private const string VERTICAL = "Vertical";
 
+
     private float[] inputs = new float[7];
     private float verticalInput;
+
+    [SerializeField] private bool unityControl = true;
 
     [SerializeField] private float motorForce = 10f;
     [SerializeField] private float maxAngle = 20f;
@@ -30,9 +34,23 @@ public class CarController : MonoBehaviour
     [SerializeField] private WheelCollider colliderBL;
     [SerializeField] private WheelCollider colliderBR;
 
+    [SerializeField] private string jetauto_car_topic = "jetauto_car/cmd_vel";
+    [SerializeField] private string jetauto_arm_topic = "jetauto_arm/cmd_vel";
+    ROSConnection ros;
+
+    private void Start()
+    {
+        ros = ROSConnection.GetOrCreateInstance();
+        ros.Subscribe<TwistMsg>(jetauto_car_topic, CarCallBack);
+        ros.Subscribe<JointStateMsg>(jetauto_arm_topic, ArmCallBack);
+    }
+
     private void FixedUpdate()
     {
-        GetInput();
+        if (unityControl)
+        {
+            GetInput();
+        }
         HandleMotor();
     }
 
@@ -40,10 +58,10 @@ public class CarController : MonoBehaviour
     {
         inputs[0] = Input.GetAxis(HORIZONTAL);
         inputs[1] = Input.GetAxis(VERTICAL);
-        inputs[2] = Input.GetKey(KeyCode.R) ? 1 : (Input.GetKey(KeyCode.F) ? -1 : 0);
-        inputs[3] = Input.GetKey(KeyCode.T) ? 1 : (Input.GetKey(KeyCode.G) ? -1 : 0);
-        inputs[4] = Input.GetKey(KeyCode.Y) ? 1 : (Input.GetKey(KeyCode.H) ? -1 : 0);
-        inputs[5] = Input.GetKey(KeyCode.U) ? 1 : (Input.GetKey(KeyCode.J) ? -1 : 0);
+        inputs[2] = Input.GetKey(KeyCode.R) ? -1 : (Input.GetKey(KeyCode.F) ? 1 : 0);
+        inputs[3] = Input.GetKey(KeyCode.T) ? -1 : (Input.GetKey(KeyCode.G) ? 1 : 0);
+        inputs[4] = Input.GetKey(KeyCode.Y) ? -1 : (Input.GetKey(KeyCode.H) ? 1 : 0);
+        inputs[5] = Input.GetKey(KeyCode.U) ? -1 : (Input.GetKey(KeyCode.J) ? 1 : 0);
         inputs[6] = Input.GetKey(KeyCode.I) ? 1 : (Input.GetKey(KeyCode.K) ? -1 : 0);
     }
 
@@ -119,6 +137,21 @@ public class CarController : MonoBehaviour
 
         trans.position = position;
         trans.rotation = rotation * Quaternion.Euler(0f, 0f, 90f);
+    }
+
+    private void CarCallBack(TwistMsg msg)
+    {
+        inputs[0] = Mathf.Min(Mathf.Max((float)-msg.angular.z, -1.0f), 1.0f);
+        inputs[1] = Mathf.Min(Mathf.Max((float)msg.linear.x, -1.0f), 1.0f);
+    }
+
+    private void ArmCallBack(JointStateMsg msg)
+    {
+        inputs[2] = Mathf.Min(Mathf.Max((float)-msg.velocity[0], -1.0f), 1.0f);
+        inputs[3] = Mathf.Min(Mathf.Max((float)-msg.velocity[1], -1.0f), 1.0f);
+        inputs[4] = Mathf.Min(Mathf.Max((float)-msg.velocity[2], -1.0f), 1.0f);
+        inputs[5] = Mathf.Min(Mathf.Max((float)-msg.velocity[3], -1.0f), 1.0f);
+        inputs[6] = Mathf.Min(Mathf.Max((float)msg.velocity[4], -1.0f), 1.0f);
     }
 
 }
