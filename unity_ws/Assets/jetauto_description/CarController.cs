@@ -156,16 +156,24 @@ public class CarController : MonoBehaviour
 
     private void CarCallBack(TwistMsg msg)
     {
-        inputs[0] = Mathf.Min(Mathf.Max((float) -msg.angular.z, -1.0f), 1.0f);
-        inputs[1] = Mathf.Min(Mathf.Max((float) msg.linear.x, -1.0f), 1.0f);
+        if (unityControl)
+        {
+            return;
+        }
+        inputs[0] = Mathf.Min(Mathf.Max((float)-msg.angular.z, -1.0f), 1.0f);
+        inputs[1] = Mathf.Min(Mathf.Max((float)msg.linear.x, -1.0f), 1.0f);
     }
 
     private void ArmCallBack(JointStateMsg msg)
     {
-        inputs[2] = Mathf.Min(Mathf.Max((float)msg.velocity[0], -1.0f), 1.0f);
-        inputs[3] = Mathf.Min(Mathf.Max((float)msg.velocity[1], -1.0f), 1.0f);
-        inputs[4] = Mathf.Min(Mathf.Max((float)msg.velocity[2], -1.0f), 1.0f);
-        inputs[5] = Mathf.Min(Mathf.Max((float)msg.velocity[3], -1.0f), 1.0f);
+        if (unityControl)
+        {
+            return;
+        }
+        inputs[2] = Mathf.Min(Mathf.Max((float)-msg.velocity[0], -1.0f), 1.0f);
+        inputs[3] = Mathf.Min(Mathf.Max((float)-msg.velocity[1], -1.0f), 1.0f);
+        inputs[4] = Mathf.Min(Mathf.Max((float)-msg.velocity[2], -1.0f), 1.0f);
+        inputs[5] = Mathf.Min(Mathf.Max((float)-msg.velocity[3], -1.0f), 1.0f);
         inputs[6] = Mathf.Min(Mathf.Max((float)msg.velocity[4], -1.0f), 1.0f);
     }
 
