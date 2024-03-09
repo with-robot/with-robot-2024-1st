@@ -22,6 +22,7 @@ setup(
     entry_points={
         "console_scripts": [
             "web_control = jetauto_control.web_control:main",
+            "lidar_driving = jetauto_control.lidar_driving:main",
         ],
     },
 )

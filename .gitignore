@@ -87,3 +87,6 @@ ros_ws/src/jetauto_description/urdf
 
 /unity_ws/Assets/URDF
 /unity_ws/Assets/Prefebs
+build/*
+install/*
+log/*
