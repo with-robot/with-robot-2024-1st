@@ -22,6 +22,7 @@ setup(
     entry_points={
         "console_scripts": [
             "web_control = jetauto_control.web_control:main",
+            "mapping = jetauto_control.mapping:main",
         ],
     },
 )
