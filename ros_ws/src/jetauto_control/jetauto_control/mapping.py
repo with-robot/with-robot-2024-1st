@@ -106,13 +106,12 @@ class JetautoMapping(Node):
 
                 with open(self.pose_txt, "a") as fp:
                     fp.write(f"{time.nanoseconds} ")
-                    for i in range(length):
-                        fp.write(f"{self.odometry.twist.linear.x} ")
-                        fp.write(f"{self.odometry.twist.linear.y} ")
-                        fp.write(f"{self.odometry.twist.linear.z} ")
-                        fp.write(f"{self.odometry.twist.angular.x} ")
-                        fp.write(f"{self.odometry.twist.angular.y} ")
-                        fp.write(f"{self.odometry.twist.angular.z} ")
+                    fp.write(f"{self.odometry.twist.linear.x} ")
+                    fp.write(f"{self.odometry.twist.linear.y} ")
+                    fp.write(f"{self.odometry.twist.linear.z} ")
+                    fp.write(f"{self.odometry.twist.angular.x} ")
+                    fp.write(f"{self.odometry.twist.angular.y} ")
+                    fp.write(f"{self.odometry.twist.angular.z} ")
                     fp.write(f"\n")
 
         # publish
