@@ -4,8 +4,10 @@ using RosMessageTypes.Geometry;
 using RosMessageTypes.Sensor;
 using System;
 using System.Collections;
+using System.Security.Cryptography.X509Certificates;
+using Unity.MLAgents.Integrations.Match3;
 
-public class CarController : MonoBehaviour
+public class BallControl : MonoBehaviour
 {
 
     private const string HORIZONTAL = "Horizontal";
@@ -17,8 +19,8 @@ public class CarController : MonoBehaviour
 
     [SerializeField] private bool unityControl = true;
 
-    [SerializeField] private float motorForce = 2f;
-    [SerializeField] private float maxAngle = 20f;
+    [SerializeField] private float motorForce = 1f;
+    [SerializeField] private float maxAngle = 1f;
 
     [SerializeField] private Transform viewFL;
     [SerializeField] private Transform viewFR;
@@ -46,12 +48,12 @@ public class CarController : MonoBehaviour
     [SerializeField] private string jetauto_car_topic = "jetauto_car/cmd_vel";
     [SerializeField] private string jetauto_arm_topic = "jetauto_arm/cmd_vel";
     ROSConnection ros;
-
+    CoordinateManager coordinateManager;
     private void Start()
     {
         ros = ROSConnection.GetOrCreateInstance();
         ros.Subscribe<TwistMsg>(jetauto_car_topic, CarCallBack);
-        ros.Subscribe<JointStateMsg>(jetauto_arm_topic, ArmCallBack);
+        coordinateManager = new CoordinateManager(transform);
     }
 
     private void FixedUpdate()
@@ -165,53 +167,110 @@ public class CarController : MonoBehaviour
         return false;
     }
 
+    class CoordinateManager
+    {
+        private float x;
+        private float y;
+        private bool isXDirection;
+        private float Direction;
+        public (float a, float b) GetCoordinates() => (x, y);
+        Transform trans;
+        float r_angle;
+        private bool isRotationComplate;
+
+        public CoordinateManager(Transform a)
+        {
+            trans = a;
+            x = 0; y = 0;
+            isXDirection = true;
+            Direction = 1;
+            r_angle = 0f;
+            isRotationComplate = false;
+
+        }
+        public void Move(float force, float rotate)
+        {
+            UpdateDirection(rotate);
+
+
+            if (isXDirection)
+            {
+                x = force * Direction;
+                y = 0f;
+            }
+            else
+            {
+                x = 0f;
+                y = force * Direction;
+            }
+        }
+
+        private void UpdateDirection(float rotation)
+        {
+            if (rotation == 0)
+            {
+                isRotationComplate = false;
+                return;
+            }
+            if (isRotationComplate) { return; }
+
+            float angle = -rotation * 10f;
+            if (isXDirection)
+            {
+                Direction = (rotation > 0) ? 1f : -1f;
+            }
+            else
+            {
+                Direction = (rotation > 0) ? 1f : -1f;
+
+            }
+            // trans.rotation.eulerAngles.z = Direction;
+            // trans.rotation *= Quaternion.Euler(0f, angle, 0f);
+            trans.Rotate(0f, Direction * 90f, 0f, Space.Self);
+            Debug.Log("rotation: " + trans.rotation);
+            RotateRobot(angle);
+        }
+        private void RotateRobot(float angle)
+        {
+            // r_angle += angle;
+            // if (Mathf.Abs(r_angle) >= 90f)
+            // {
+            //     r_angle = 0f;
+            //     isRotationComplate = true;
+            // }
+
+            isRotationComplate = true;
+            isXDirection = !isXDirection;
+
+            // ToggleDirection();
+        }
+        public void ToggleDirection()
+        {
+            if (isRotationComplate)
+            {
+                isXDirection = !isXDirection;
+            }
+        }
+    }
     private void HandleMotor()
     {
         float currentTurnAngle = maxAngle * inputs[0];
         float currentAccelForce = motorForce * inputs[1];
 
-        colliderFL.motorTorque = currentAccelForce;
-        colliderFR.motorTorque = currentAccelForce;
+        coordinateManager.Move(currentAccelForce, currentTurnAngle);
 
-        colliderFL.steerAngle = currentTurnAngle;
-        colliderFR.steerAngle = currentTurnAngle;
+        (float x, float y) = coordinateManager.GetCoordinates();
+        // if (currentTurnAngle != 0)
+        // {
+        Debug.Log("mag= " + inputs[1] + ",ang=" + inputs[0]);
+        // Debug.Log("x= " + x + ",y=" + y);
 
-        UpdateWheel(colliderFL, viewFL);
-        UpdateWheel(colliderFR, viewFR);
-        UpdateWheel(colliderBL, viewBL);
-        UpdateWheel(colliderBR, viewBR);
+        // }
 
-        //
-        if (ValidaeAction(arm_link1.localEulerAngles.y - 90, inputs[2], -170, 170))
-        {
-            arm_link1.Rotate(new Vector3(0, inputs[2], 0));
-        }
-        if (ValidaeAction(arm_link2.localEulerAngles.z, inputs[3], -90, 90))
-        {
-            arm_link2.Rotate(new Vector3(0, 0, inputs[3]));
-        }
-        if (ValidaeAction(arm_link3.localEulerAngles.z, inputs[4], -90, 90))
-        {
-            arm_link3.Rotate(new Vector3(0, 0, inputs[4]));
-        }
-        if (ValidaeAction(arm_link4.localEulerAngles.z, inputs[5], -90, 90))
-        {
-            arm_link4.Rotate(new Vector3(0, 0, inputs[5]));
-        }
-        if (ValidaeAction(l_in_link.localEulerAngles.x, inputs[6], 0, 90))
-        {
-            l_in_link.Rotate(new Vector3(inputs[6], 0, 0));
-            l_link.Rotate(new Vector3(inputs[6], 0, 0));
-            l_out_link.Rotate(new Vector3(-inputs[6], 0, 0));
+        // transform.Translate(new Vector3(y, 0, x) * Time.deltaTime);
+        // transform.eulerAngles += new Vector3(0, 0, currentTurnAngle);
+        transform.position += new Vector3(y, 0, x) * Time.deltaTime;
 
-        }
-
-        if (ValidaeAction(-r_in_link.localEulerAngles.x, inputs[6], 0, 90))
-        {
-            r_in_link.Rotate(new Vector3(-inputs[6], 0, 0));
-            r_link.Rotate(new Vector3(-inputs[6], 0, 0));
-            r_out_link.Rotate(new Vector3(inputs[6], 0, 0));
-        }
     }
 
     private void UpdateWheel(WheelCollider col, Transform trans)
@@ -230,10 +289,11 @@ public class CarController : MonoBehaviour
         {
             return;
         }
-        inputs[0] = Mathf.Min(Mathf.Max((float)-msg.angular.z, -1.8f), 1.8f);
-        inputs[1] = Mathf.Min(Mathf.Max((float)msg.linear.x, -1.0f), 1.0f);
+        inputs[0] = Mathf.Min(Mathf.Max((float)-msg.angular.z, -1.0f), 1.0f);
+        inputs[1] = Mathf.Min(Mathf.Max((float)msg.linear.x, -3.0f), 3.0f);
 
-        Debug.Log("angular.z: " + inputs[0] + ", torque.x:" + inputs[1]);
+        // Debug.Log("input from robot: angular.z: " + inputs[0] + ", linear.x: " + inputs[1]);
+        // Debug.Log("input from robot: angular.z: " + -msg.angular.z + ", linear.x: " + msg.linear.x);
 
     }
 

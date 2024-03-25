@@ -87,3 +87,13 @@ ros_ws/src/jetauto_description/urdf
 
 /unity_ws/Assets/URDF
 /unity_ws/Assets/Prefebs
+
+*.sh
+ros_ws/src/track_path
+ros_ws/src/jetauto_control
+*.json
+build
+install
+log
+*.pyc
+test
