@@ -49,12 +49,12 @@ class AStartSearchNode(Node):
         )
 
         # SLAM 맵에서 -90도 회전된 각도 (라디안 단위)
-        rotation_angle = -math.pi / 2
+        rotation_angle_angle = -math.pi / 2
 
         # 회전 변환 행렬
-        self.rotation_matrix = [
-            [math.cos(rotation_angle), -math.sin(rotation_angle)],
-            [math.sin(rotation_angle), math.cos(rotation_angle)],
+        self.rotation_angle_matrix = [
+            [math.cos(rotation_angle_angle), -math.sin(rotation_angle_angle)],
+            [math.sin(rotation_angle_angle), math.cos(rotation_angle_angle)],
         ]
 
         self.get_logger().info(f"AStartpath_searchNode started...")
@@ -102,14 +102,10 @@ class AStartSearchNode(Node):
                 return
             else:
                 stop_rotating = True
+                self.amend_count = 0
 
         self.prev_angular_z = input_msg.twist.angular.z
         self.change_direction(direction=self._direction, state=False)
-
-        # 초기설정
-        # if new_cor == (0, 0) and self.old_pos == (-1, -1):
-        #     self.get_logger().info(f"초기설정")
-        #     self.setup()
 
         if new_cor == DST_POS:
             if not self.complete:
@@ -118,6 +114,8 @@ class AStartSearchNode(Node):
                 self.pub_jetauto_car.publish(self.twist_msg)
                 self.get_logger().info(f"도착지[{new_cor}]에 도착했습니다.")
                 self.complete = True
+
+                self.setup()
             return
         elif new_cor == self.old_pos:
             # 수평위치 보정
@@ -150,7 +148,10 @@ class AStartSearchNode(Node):
 
     # 회전여부를 파악한다.
     def is_rotating(self, angular: object):
-        def angle_diff(angle1, angle2):
+
+        TARGET_ANGLE = math.pi / 2
+
+        def __angle_diff(angle1, angle2):
             if angle1 < angle2:
                 angle1 += 2 * math.pi
 
@@ -161,21 +162,21 @@ class AStartSearchNode(Node):
                 else (2 * math.pi - abs(_diff)) * _diff / abs(_diff)
             )
 
-        rotation = angle_diff(angular.z, self.prev_angular_z)
-        rotation_angle = math.pi / 2
-        if rotation_angle * 0.8 < rotation:
-            break_torque = self.get_break_torque(rotation, rotation_angle)
+        rotation_angle = __angle_diff(angular.z, self.prev_angular_z)
+
+        if TARGET_ANGLE * 0.8 < rotation_angle:
+            break_torque = self.get_break_torque(rotation_angle, TARGET_ANGLE)
             self.get_logger().info(f"break rot_torque: {break_torque}")
 
             self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=0.0)
             self.twist_msg.linear = Vector3(x=0.0, y=0.0, z=break_torque)
             self.pub_jetauto_car.publish(self.twist_msg)
 
-        # magnitude = math.sqrt(x**2 + y**2 + z**2)
-        result = rotation < rotation_angle * 0.92
+            self.get_logger().info(
+                f"angular_diff: {rotation_angle} / {rotation_angle < TARGET_ANGLE * 0.92}"
+            )
 
-        self.get_logger().info(f"angular_diff: {rotation} / {result}")
-        return result
+        return rotation_angle < TARGET_ANGLE * 0.92
 
     def get_break_torque(
         self,
@@ -185,9 +186,8 @@ class AStartSearchNode(Node):
         min_torque: float = 0.00,
     ):
         """
-        현재 회전각도에 따라 토크의 크기를 결정한다.
-        회전각도가 90도에 가까워질수록 토크의 크기를 로그형태로 줄여나간다.
-        회전각도가 0도에 가까울수록 토크의 크기는 최대값(2.0)에 가깝고, 90도에 가까워질수록 토크의 크기는 최소값(0.3)에 가깝다.
+        현재 회전각도에 따라 브레이크 토크의 크기를 결정한다.
+        회전각도가 90도에 가까워질수록 토크 크기로 줄여나간다.
         """
         _torque = (
             (max_torque - min_torque)
@@ -199,40 +199,50 @@ class AStartSearchNode(Node):
     # 몸체 평행상태 조정
     def _amend_h_pos(self, angular) -> tuple:
         if self.rotate_state:
+            # 회전중인 경우 보정하지 않는다.
             return
 
-        angular_z = -angular.z % (math.pi * 2)
-        # self.get_logger().info(f"angular:{angular}, magnitude: {magnitude}")
-        amend_theta = 0.0
-        dir_text = ""
+        amend_theta, dir_text = self._get_deviation_radian(angular.z)
+
+        if self.amend_count % 5 == 0 and abs(amend_theta) > 3 / 180 * math.pi:
+            self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=amend_theta * 3 / 5)
+            self.twist_msg.linear = Vector3(x=0.6, y=0.0, z=0.0)
+            self.pub_jetauto_car.publish(self.twist_msg)
+
+            self.get_logger().info(
+                f"[{dir_text} 위치보정] 이격크기:{amend_theta} / 기준:{2 / 180 * math.pi}"
+            )
+
+        self.amend_count += 1
+
+    # 각도를 입력받아, 진행방향과 벗어난 각도를 반환한다.
+    def _get_deviation_radian(self, _z: float) -> tuple[float, str]:
+        # 유니티에서 음의 값으로 제공.
+        angular_z = -_z % (math.pi * 2)
+
         if self.direction == "x":
-            amend_theta = -(math.pi - angular_z)
+            amend_theta = angular_z - math.pi
             # z값이 이전치와 차이가 어느정도 나면 보정한다.
             dir_text = "Z방향"
 
         elif self.direction == "-x":
-            angular_z = angular_z if angular_z > math.pi else math.pi * 2 - angular_z
-            amend_theta = -(math.pi * 2 - angular_z)
+            angular_z = angular_z if angular_z > math.pi else math.pi * 2 + angular_z
+            amend_theta = angular_z - math.pi * 2
             dir_text = "-Z방향"
 
         elif self.direction == "y":
-            amend_theta = -(math.pi / 2 - angular_z)
+            amend_theta = angular_z - math.pi / 2
             # z값이 이전치와 차이가 어느정도 나면 보정한다.
             dir_text = "Y방향"
 
         elif self.direction == "-y":
-            amend_theta = math.pi * 3 / 4 - angular_z
+            amend_theta = angular_z - math.pi * 3 / 4
             dir_text = "-Y방향"
+        else:
+            amend_theta = 0.0
+            dir_text = "직진"
 
-        if self.amend_count % 3 == 0 and abs(amend_theta) > 5 / 180 * math.pi:
-            self.get_logger().info(
-                f"amend_theta: {angular_z} || {amend_theta} /{5 / 360 * 2 * math.pi}"
-            )
-            self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=amend_theta * 3 / 5)
-            self.twist_msg.linear = Vector3(x=0.5, y=0.0, z=0.0)
-            self.pub_jetauto_car.publish(self.twist_msg)
-            self.get_logger().info(f"{dir_text} 위치보정")
-            self.amend_count += 1
+        return amend_theta, dir_text
 
     """현재위치, 다음위치, 그 다음위치를 입력으로 받는다.
        앞방향 토크와 방향 각도를 반환한다.
@@ -248,9 +258,9 @@ class AStartSearchNode(Node):
         # x2, y2 = cord2
         x1, y1 = cord2 if cord2 else cord1
 
-        rot_torque = 0.6
+        rot_torque = 0.7
         rot_theta = 1.4  # 57도
-        str_torque = 0.5
+        str_torque = 1.0
         if self.direction == "x":
             if y1 > y0:
                 dir = rot_torque, rot_theta  # 좌회전
@@ -310,7 +320,7 @@ class AStartSearchNode(Node):
             self.get_logger().info(f"breaking: {-str_torque * 2 / 3}")
             self.twist_msg.linear = Vector3(x=-str_torque * 2 / 3, y=0.0, z=0.0)
             self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=0.0)
-            # self.pub_jetauto_car.publish(self.twist_msg)
+            self.pub_jetauto_car.publish(self.twist_msg)
             # time.sleep(0.1)
 
         return dir
@@ -331,8 +341,14 @@ class AStartSearchNode(Node):
     def _axis_transform2(self, cord: tuple[float, float]):
         self.get_logger().info(f"_axis_transform: {cord}")
         # PC 맵 좌표를 SLAM 맵 좌표로 변환
-        _x = self.rotation_matrix[0][0] * cord[0] + self.rotation_matrix[0][1] * cord[1]
-        _y = self.rotation_matrix[1][0] * cord[0] + self.rotation_matrix[1][1] * cord[1]
+        _x = (
+            self.rotation_angle_matrix[0][0] * cord[0]
+            + self.rotation_angle_matrix[0][1] * cord[1]
+        )
+        _y = (
+            self.rotation_angle_matrix[1][0] * cord[0]
+            + self.rotation_angle_matrix[1][1] * cord[1]
+        )
 
         result = int(round(_x + 4.6, 0)), int(round(_y + 4.6, 0))
         self.get_logger().info(f"_axis_transform Result: {result}")
