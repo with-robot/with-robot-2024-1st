@@ -40,7 +40,7 @@ class AStartSearchNode(Node):
         self.create_subscription(
             TwistStamped,
             "/unity_tf",
-            callback=self._unity_tf_sub_callback,
+            callback=self.unity_tf_sub_callback,
             qos_profile=qos_profile,
         )
         self.pub_jetauto_car = self.create_publisher(
@@ -58,9 +58,9 @@ class AStartSearchNode(Node):
 
         self.get_logger().info(f"AStartpath_searchNode started...")
         self.twist_msg = Twist()
-        self._setup()
+        self.setup()
 
-    def _setup(self):
+    def setup(self):
         self._dir: str = "x"
         self._change_dir(dir=self._dir, state=False)
         self.last_message_time: Time = Time(nanoseconds=0)
@@ -70,22 +70,7 @@ class AStartSearchNode(Node):
         self.prev_angular_z: float = -math.pi
         self.amend_count: int = 0
 
-    def _change_dir(self, *, dir: str = None, state: bool = None):
-        if dir:
-            self.dir = dir
-        if state is not None:
-            self.rotate_state = state
-
-    def _unity_tf_sub_callback(self, input_msg: TwistStamped):
-
-        # message_time = Time.from_msg(input_msg.header.stamp)
-
-        # time_diff = message_time.nanoseconds - self.last_message_time.nanoseconds
-        # if time_diff < Duration(nanoseconds=100000000).nanoseconds:  # 0.1초
-        #     self.get_logger().info(f" nanoseconds passed")
-        #     return
-        # else:
-        #     self.last_message_time = message_time
+    def unity_tf_sub_callback(self, input_msg: TwistStamped):
 
         # msg로부터 위치정보를 추출
         current_pos = (input_msg.twist.linear.x, input_msg.twist.linear.y)
@@ -93,7 +78,7 @@ class AStartSearchNode(Node):
         # 좌표변환
         new_cor = self._get_cordinate(current_pos)
 
-        # 회전여부 파악
+        # 회전중 여부 체크
         stop_rotating = False
         if self.rotate_state:
             if self.is_rotating(input_msg.twist.angular):
@@ -103,17 +88,11 @@ class AStartSearchNode(Node):
                 self.amend_count = 0
 
         self.prev_angular_z = input_msg.twist.angular.z
-        self._change_dir(dir=self._dir, state=False)
+        # self._change_dir(dir=self._dir, state=False)
 
         if new_cor == DST_POS:
-            if not self.complete:
-                self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=0.0)
-                self.twist_msg.linear = Vector3(x=0.0, y=0.0, z=0.0)
-                self.pub_jetauto_car.publish(self.twist_msg)
-                self.get_logger().info(f"도착지[{new_cor}]에 도착했습니다.")
-                self.complete = True
-
-                self._setup()
+            # 정지 및 초기화처리
+            self.stopat_dest(new_cor)
             return
         elif new_cor == self.old_pos:
             # 수평위치 보정
@@ -143,6 +122,16 @@ class AStartSearchNode(Node):
         self.get_logger().info(f"토크: {x}, 회전: {theta}")
         self.get_logger().info(f"publish_msg: {self.twist_msg}")
 
+    def stopat_dest(self, pos: tuple) -> None:
+        if not self.complete:
+            self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=0.0)
+            self.twist_msg.linear = Vector3(x=0.0, y=0.0, z=0.0)
+            self.pub_jetauto_car.publish(self.twist_msg)
+            self.get_logger().info(f"도착지[{pos}]에 도착했습니다.")
+            self.complete = True
+
+            self.setup()
+
     # 회전여부를 파악한다.
     def is_rotating(self, angular: object):
 
@@ -163,17 +152,20 @@ class AStartSearchNode(Node):
 
         if TARGET_ANGLE * 0.8 < rotation_angle:
             break_torque = self.get_break_torque(rotation_angle, TARGET_ANGLE)
-            self.get_logger().info(f"break rot_torque: {break_torque}")
-
-            self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=0.0)
-            self.twist_msg.linear = Vector3(x=0.0, y=0.0, z=break_torque)
-            self.pub_jetauto_car.publish(self.twist_msg)
+            self.send_breakmsg("is_rotating", break_torque)
 
             self.get_logger().info(
                 f"angular_diff: {rotation_angle} / {rotation_angle < TARGET_ANGLE * 0.92}"
             )
 
         return rotation_angle < TARGET_ANGLE * 0.92
+
+    # break신호
+    def send_breakmsg(self, caller: str, torque: float):
+        self.get_logger().info(f"[{caller}] break_torque: {torque}")
+        self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=0.0)
+        self.twist_msg.linear = Vector3(x=0.0, y=0.0, z=torque)
+        self.pub_jetauto_car.publish(self.twist_msg)
 
     def get_break_torque(
         self,
@@ -199,15 +191,15 @@ class AStartSearchNode(Node):
             # 회전중인 경우 보정하지 않는다.
             return
 
-        amend_theta, dir_text = self._get_deviation_radian(angular.z)
+        amend_theta, message = self._get_deviation_radian(angular.z)
 
-        if self.amend_count % 5 == 0 and abs(amend_theta) > 3 / 180 * math.pi:
+        if self.amend_count % 3 == 0 and abs(amend_theta) > 3 / 180 * math.pi:
             self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=amend_theta * 3 / 5)
             self.twist_msg.linear = Vector3(x=0.6, y=0.0, z=0.0)
             self.pub_jetauto_car.publish(self.twist_msg)
 
             self.get_logger().info(
-                f"[{dir_text} 위치보정] 이격크기:{amend_theta} / 기준:{2 / 180 * math.pi}"
+                f"[{message} 위치보정] 이격크기:{amend_theta} / 기준:{2 / 180 * math.pi}"
             )
 
         self.amend_count += 1
@@ -220,26 +212,26 @@ class AStartSearchNode(Node):
         if self.dir == "x":
             amend_theta = angular_z - math.pi
             # z값이 이전치와 차이가 어느정도 나면 보정한다.
-            dir_text = "Z방향"
+            message = "Z방향"
 
         elif self.dir == "-x":
             angular_z = angular_z if angular_z > math.pi else math.pi * 2 + angular_z
             amend_theta = angular_z - math.pi * 2
-            dir_text = "-Z방향"
+            message = "-Z방향"
 
         elif self.dir == "y":
             amend_theta = angular_z - math.pi / 2
             # z값이 이전치와 차이가 어느정도 나면 보정한다.
-            dir_text = "Y방향"
+            message = "Y방향"
 
         elif self.dir == "-y":
             amend_theta = angular_z - math.pi * 3 / 4
-            dir_text = "-Y방향"
+            message = "-Y방향"
         else:
             amend_theta = 0.0
-            dir_text = "직진"
+            message = "직진"
 
-        return amend_theta, dir_text
+        return amend_theta, message
 
     """현재위치, 다음위치, 그 다음위치를 입력으로 받는다.
        앞방향 토크와 방향 각도를 반환한다.
@@ -253,69 +245,52 @@ class AStartSearchNode(Node):
         x0, y0 = cord0
         x1, y1 = cord2 if cord2 else cord1
 
-        rot_torque = 0.6
-        rot_theta = 1.4  # 57도
-        str_torque = 1.0
+        rot_torque = 0.7
+        rot_theta = 1.4  # 90도
+        str_torque = 0.9
+
+        output = str_torque, 0.0  # 직진
         if self.dir == "x":
             if y1 > y0:
-                dir = rot_torque, rot_theta  # 좌회전
-                self._dir = "y"
-                self._change_dir(state=True)
+                output = rot_torque, rot_theta  # 좌회전
+                _next_dir = "y"
             elif y1 < y0:
-                dir = rot_torque, -rot_theta  # 우회전
-                self._dir = "-y"
-                self._change_dir(state=True)
-            else:
-                dir = str_torque, 0.0  # 직진
-                self._change_dir(dir=self._dir, state=False)
+                output = rot_torque, -rot_theta  # 우회전
+                _next_dir = "-y"
 
         elif self.dir == "-x":
             if y1 > y0:
-                dir = rot_torque, -rot_theta  # 우회전
-                self._dir = "y"
-                self._change_dir(state=True)
+                output = rot_torque, -rot_theta  # 우회전
+                _next_dir = "y"
             elif y1 < y0:
-                dir = rot_torque, rot_theta  # 좌회전
-                self._dir = "-y"
-                self._change_dir(state=True)
-            else:
-                dir = str_torque, 0.0  # 직진
-                self._change_dir(state=False)
+                output = rot_torque, rot_theta  # 좌회전
+                _next_dir = "-y"
 
         elif self.dir == "y":
             if x1 > x0:
-                dir = rot_torque, -rot_theta  # 우회전
-                self._dir = "x"
-                self._change_dir(state=True)
+                output = rot_torque, -rot_theta  # 우회전
+                _next_dir = "x"
             elif x1 < x0:
-                dir = rot_torque, rot_theta  # 좌회전
-                self._dir = "-x"
-                self._change_dir(state=True)
-            else:
-                dir = str_torque, 0.0  # 직진
-                self._change_dir(dir=self._dir, state=False)
+                output = rot_torque, rot_theta  # 좌회전
+                _next_dir = "-x"
 
         elif self.dir == "-y":
             if x1 > x0:
-                dir = rot_torque, rot_theta  # 좌회전
-                self._dir = "x"
-                self._change_dir(state=True)
+                output = rot_torque, rot_theta  # 좌회전
+                _next_dir = "x"
             elif x1 < x0:
-                dir = rot_torque, -rot_theta  # 우회전
-                self._dir = "-x"
-                self._change_dir(state=True)
-            else:
-                dir = str_torque, 0.0  # 직진
-                self._change_dir(dir=self._dir, state=False)
+                output = rot_torque, -rot_theta  # 우회전
+                _next_dir = "-x"
 
-        if dir[1] != 0:
-            # breaking
-            self.get_logger().info(f"breaking: {-str_torque * 2 / 3}")
-            self.twist_msg.linear = Vector3(x=-str_torque * 2 / 3, y=0.0, z=0.0)
-            self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=0.0)
-            self.pub_jetauto_car.publish(self.twist_msg)
+        if output[1] == 0:
+            # 방향전환후 현재방향으로 적용한다.
+            self._change_dir(state=False)
+        else:
+            # 회전을 하기전 감속
+            self.send_breakmsg("_get_torq_theta", -str_torque * 3 / 5)
+            self._change_dir(dir=_next_dir, state=True)
 
-        return dir
+        return output
 
     # 좌표취득
     def _get_cordinate(self, cord: tuple[float, float]):
@@ -326,17 +301,11 @@ class AStartSearchNode(Node):
         result = (_x if _x > 0 else 0, _y if _y > 0 else 0)
         return result
 
-    # 전치
-    def _transpose(self, matrix: list[list[int]]):
-        rows_A = len(matrix)
-        cols_A = len(matrix[0])
-        T = [[0 for _ in range(rows_A)] for _ in range(cols_A)]
-
-        for i in range(rows_A):
-            for j in range(cols_A):
-                T[j][i] = matrix[i][j]
-
-        return T
+    def _change_dir(self, *, dir: str = None, state: bool = None):
+        if dir:
+            self.dir = dir
+        if state is not None:
+            self.rotate_state = state
 
     # a* search
     def find_path(self, start: tuple[int, int], goal: tuple[int, int]):
