@@ -33,7 +33,7 @@ class AStartSearchNode(Node):
     rotate_state: bool
 
     def __init__(self):
-        super().__init__("path_finder_astar")
+        super().__init__("path_search_astar")
         queue_size = 10
         # odom 위치정보 취득
         qos_profile = QoSProfile(depth=queue_size)
@@ -47,22 +47,12 @@ class AStartSearchNode(Node):
             Twist, "jetauto_car/cmd_vel", queue_size
         )
 
-        # SLAM 맵에서 -90도 회전된 각도 (라디안 단위)
-        # rotation_angle_angle = -math.pi / 2
-
-        # 회전 변환 행렬
-        # self.rotation_angle_matrix = [
-        #     [math.cos(rotation_angle_angle), -math.sin(rotation_angle_angle)],
-        #     [math.sin(rotation_angle_angle), math.cos(rotation_angle_angle)],
-        # ]
-
         self.get_logger().info(f"AStartpath_searchNode started...")
         self.twist_msg = Twist()
         self.setup()
 
     def setup(self):
-        self._dir: str = "x"
-        self._change_dir(dir=self._dir, state=False)
+        self._change_dir(dir="x", state=False)
         self.last_message_time: Time = Time(nanoseconds=0)
         self.old_pos: tuple[int, int] = (-1, -1)
         self.previos_pos: tuple[float, float] = None
@@ -102,7 +92,7 @@ class AStartSearchNode(Node):
 
         self.old_pos = new_cor
 
-        # 다음 위치
+        # 네비게이션정보 취득.
         paths = self.find_path(new_cor, DST_POS)
         self.get_logger().info(f"A* PATH: {paths}")
 
@@ -110,15 +100,16 @@ class AStartSearchNode(Node):
             self.get_logger().info(f"길찾기 실패: 목표위치({DST_POS})")
             return
 
-        npos1, npos2 = paths[1], paths[2] if len(paths) > 2 else None
-        x, theta = self._get_torq_theta(new_cor, npos1, None)
+        # 다음번 위치에 대한 토크 및 회전각 취득.
+        next_cor = paths[1]
+        x, theta = self._get_torq_theta(new_cor, next_cor, None)
 
         # 메시지 발행
         self.twist_msg.linear = Vector3(x=x, y=0.0, z=0.0)
         self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=theta)
         self.pub_jetauto_car.publish(self.twist_msg)
 
-        self.get_logger().info(f"현재:{new_cor}, 1차: {npos1}")
+        self.get_logger().info(f"현재:{new_cor}, 1차: {next_cor}")
         self.get_logger().info(f"토크: {x}, 회전: {theta}")
         self.get_logger().info(f"publish_msg: {self.twist_msg}")
 
@@ -247,7 +238,7 @@ class AStartSearchNode(Node):
 
         rot_torque = 0.7
         rot_theta = 1.4  # 90도
-        str_torque = 0.9
+        str_torque = 0.4
 
         output = str_torque, 0.0  # 직진
         if self.dir == "x":

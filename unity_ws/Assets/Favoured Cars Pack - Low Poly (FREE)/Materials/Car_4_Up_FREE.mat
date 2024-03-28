@@ -1,0 +1,62 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Car_4_Up_FREE
+  m_Shader: {fileID: 4800000, guid: 6aed0317c55d65746a016c04271bc105, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _BumpMap:
+        m_Texture: {fileID: 2800000, guid: 136d9286679c1554e8da71f661be5871, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _Cube:
+        m_Texture: {fileID: 8900000, guid: 86b86decb5c0c44418346e6c663af545, type: 2}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _FlakeTex:
+        m_Texture: {fileID: 2800000, guid: 0a1dad32a644e3540bce773ec4f1419a, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _MainTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 5, y: 5}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _BumpDens: 2.5
+    - _CandyPower: 4.6153846
+    - _CandyScale: 0.923077
+    - _FlakeDens: 40
+    - _FresnelPower: 1.3826923
+    - _FresnelScale: 1.2692307
+    - _MetalicPower: 0
+    - _MetalicScale: 0
+    - _Shininess: 1.9999998
+    m_Colors:
+    - _AmbientColor: {r: 0.7254902, g: 0.69411767, b: 0.69411767, a: 1}
+    - _AmbientColor2: {r: 0.7254902, g: 0.69411767, b: 0.69411767, a: 1}
+    - _Color: {r: 0.5660378, g: 0.5660378, b: 0.5660378, a: 1}
+    - _ReflectionColor: {r: 1, g: 1, b: 1, a: 1}
+    - _SpecColor: {r: 0.7264151, g: 0.6955767, b: 0.6955767, a: 1}
+  m_BuildTextureStacks: []
+--- !u!1002 &2100001
+EditorExtensionImpl:
+  serializedVersion: 6

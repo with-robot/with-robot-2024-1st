@@ -7,7 +7,8 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 
 def generate_launch_description():
-    package_name = "path_search"
+    package_name1 = "path_search"
+    package_name2 = "object_detection"
 
     unity_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -19,16 +20,18 @@ def generate_launch_description():
         ),
     )
 
-    node_web_control = Node(
-        package=package_name,
+    path_find = Node(
+        package=package_name1,
         executable="track",
         output="screen",
         parameters=[],
     )
 
-    return LaunchDescription(
-        [
-            unity_launch,
-            node_web_control,
-        ]
+    node_object_detection = Node(
+        package=package_name2,
+        executable="object_detection",
+        output="screen",
+        parameters=[],
     )
+
+    return LaunchDescription([unity_launch, path_find, node_object_detection])

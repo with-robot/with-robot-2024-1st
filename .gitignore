@@ -94,5 +94,4 @@ ros_ws/src/jetauto_control
 build
 install
 log
-*.pyc
-test
+_temp_dir
