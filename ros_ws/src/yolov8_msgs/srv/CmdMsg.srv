@@ -1,0 +1,6 @@
+# Request message
+string message
+geometry_msgs/Vector3 data
+---
+# Response message
+bool success

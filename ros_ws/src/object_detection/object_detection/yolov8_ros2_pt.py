@@ -4,8 +4,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from pathlib import Path
-from yolov8_msgs.msg import InferenceResult
-from yolov8_msgs.msg import Yolov8Inference
+from yolov8_msgs.msg import InferenceResult, Yolov8Inference
 from ament_index_python.packages import get_package_share_directory
 
 bridge = CvBridge()
