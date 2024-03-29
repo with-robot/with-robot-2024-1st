@@ -12,7 +12,7 @@ import re
 class AStartSearchNode(Node):
 
     ROT_TORQUE = 0.6  # 회전토크
-    ROT_THETA = 1.4  # 회전각도크기
+    ROT_THETA = 1.35  # 회전각도크기
     FWD_TORQUE = 0.4  # 직진방향 토크
 
     # SLAM 맵 10X10
@@ -185,8 +185,8 @@ class AStartSearchNode(Node):
         self,
         angle: float,
         target_angle: float,
-        max_torque: float = 0.05,
-        min_torque: float = 0.00,
+        max_torque: float = 0.07,
+        min_torque: float = 0.02,
     ) -> float:
         """
         현재 회전각도에 따라 브레이크 토크의 크기를 결정한다.
@@ -237,7 +237,7 @@ class AStartSearchNode(Node):
             message = "Y방향"
 
         elif self.dir == "-y":
-            amend_theta = angular_z - math.pi * 3 / 4
+            amend_theta = angular_z - math.pi * 3 / 2
             message = "-Y방향"
         else:
             amend_theta = 0.0
