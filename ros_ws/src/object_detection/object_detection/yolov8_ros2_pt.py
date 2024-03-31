@@ -28,7 +28,7 @@ class Camera_subscriber(Node):
             Image, "jetauto/detp_camera/img_raw", self.camera_callback, 10
         )
 
-        self.yolov8_pub = self.create_publisher(Yolov8Inference, "/Yolov8_Inference", 1)
+        # self.yolov8_pub = self.create_publisher(Yolov8Inference, "/Yolov8_Inference", 1)
         self.img_pub = self.create_publisher(Image, "/inference_result", 1)
 
     def camera_callback(self, data):
@@ -55,13 +55,11 @@ class Camera_subscriber(Node):
                 self.inference_result.right = int(b[3])
                 self.yolov8_inference.yolov8_inference.append(self.inference_result)
 
-            self.get_logger().info(f"{self.yolov8_inference}")
-
         annotated_frame = results[0].plot()
         img_msg = bridge.cv2_to_imgmsg(annotated_frame)
 
         self.img_pub.publish(img_msg)
-        self.yolov8_pub.publish(self.yolov8_inference)
+        # self.yolov8_pub.publish(self.yolov8_inference)
         self.yolov8_inference.yolov8_inference.clear()
 
 

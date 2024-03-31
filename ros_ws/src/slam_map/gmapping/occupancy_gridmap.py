@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import threading
 import rclpy
 from rclpy.node import Node
 from rclpy.time import Time
@@ -9,8 +8,6 @@ from geometry_msgs.msg import Twist
 from geometry_msgs.msg import TwistStamped
 from sensor_msgs.msg import LaserScan
 from pathlib import Path
-
-driver = None
 
 
 class JetautoMapping(Node):
@@ -125,13 +122,12 @@ class JetautoMapping(Node):
                     fp.write(f"\n")
 
         # publish
-        driver.jetauto_car.linear.x = x
-        driver.jetauto_car.angular.z = z
+        self.jetauto_car.linear.x = x
+        self.jetauto_car.angular.z = z
         self.pub_jetauto_car.publish(self.jetauto_car)
 
 
 def main(args=None):
-    global driver
     rclpy.init(args=args)
 
     driver = JetautoMapping()

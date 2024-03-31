@@ -2,18 +2,47 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
+from rclpy.time import Time
+from rclpy.executors import MultiThreadedExecutor
+from rclpy.callback_groups import ReentrantCallbackGroup
 from geometry_msgs.msg import TwistStamped, Twist, Vector3
 from yolov8_msgs.srv import CmdMsg
+from sensor_msgs.msg import LaserScan
 from collections import deque
 import math
 import re
+
+laser_scan: LaserScan = None
+
+
+class LidarScanNode(Node):
+    def __init__(self) -> None:
+        super().__init__("lidar_scan_node")
+
+        # 기본 콜백 그룹 생성
+        self._default_callback_group = ReentrantCallbackGroup()
+
+        # lidar subscriber
+        self.create_subscription(
+            LaserScan,
+            "jetauto/scan",
+            callback=self.scan_handler,
+            qos_profile=10,
+        )
+
+        self.get_logger().info(f"LidarScanNode started...")
+
+    def scan_handler(self, msg: LaserScan):
+        global laser_scan
+        laser_scan = msg
+        # self.get_logger().info(f"laser_scan: {laser_scan}")
 
 
 class AStartSearchNode(Node):
 
     ROT_TORQUE = 0.6  # 회전토크
     ROT_THETA = 1.35  # 회전각도크기
-    FWD_TORQUE = 0.4  # 직진방향 토크
+    FWD_TORQUE = 1.0  # 직진방향 토크
 
     # SLAM 맵 10X10
     SLAM_MAP = [
@@ -62,6 +91,7 @@ class AStartSearchNode(Node):
         self.get_logger().info(f"목적지 설정: {pos}")
 
     def setup(self) -> None:
+        self.nanoseconds = 0
         self._change_dir(dir="x", state=False)
         self.dest_pos = (2, 9)
         self.old_pos: tuple[int, int] = (-1, -1)
@@ -79,6 +109,8 @@ class AStartSearchNode(Node):
             x = int(request.data.x)
             y = int(request.data.y)
             self.set_destpos((x, y))
+        elif request.message == "set_torque":
+            self.FWD_TORQUE = request.data.x
         else:
             response.success = False
 
@@ -128,6 +160,11 @@ class AStartSearchNode(Node):
             # 회전 전 감속
             self.send_breakmsg("_get_torq_theta", -self.FWD_TORQUE * 3 / 5)
 
+        elif self.is_near():
+            # 급 감속
+            self.get_logger().info(f"#### 급 감속 ####")
+            self.send_breakmsg("_get_torq_theta", -self.FWD_TORQUE * 4 / 5)
+
         # 메시지 발행
         self.twist_msg.linear = Vector3(x=x, y=0.0, z=0.0)
         self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=theta)
@@ -136,6 +173,39 @@ class AStartSearchNode(Node):
         self.get_logger().info(f"현재:{new_cor}, 1차: {next_cor}")
         self.get_logger().info(f"토크: {x}, 회전: {theta}")
         self.get_logger().info(f"publish_msg: {self.twist_msg}")
+
+    def is_near(self) -> bool:
+        # 로봇이 전방물체와 50cm이내 접근상태이면 True를 반환
+        if laser_scan:
+            time = Time.from_msg(laser_scan.header.stamp)
+            # Run if only laser scan from simulation is updated
+            if time.nanoseconds > self.nanoseconds:
+                self.nanoseconds = time.nanoseconds
+
+                ### Driving ###
+                nearest_distance = 0.5  # 50cm
+                win = 8  # # of elements in forward, left, right sensor groups
+                length = len(laser_scan.ranges)
+                center = length // 2
+                distances = []
+                for i in range(length // 8):
+                    if i * win < center and (i + 1) * win > center:
+                        shift1, shift2 = 0, 1
+                    elif (i + 1) * win < center:
+                        shift1, shift2 = 0, 0
+                    else:
+                        shift1, shift2 = 1, 1
+                    distances.append(
+                        min(
+                            laser_scan.ranges[win * i + shift1 : win * (i + 1) + shift2]
+                        )
+                    )
+                self.get_logger().info(
+                    f"distances:{distances[4:6]}/기준:{nearest_distance}"
+                )
+                return min(distances[4:7]) >= nearest_distance
+
+        return False
 
     def stopat_dest(self, pos: tuple) -> None:
         if self.is_arrived:
@@ -224,12 +294,12 @@ class AStartSearchNode(Node):
         if self.dir == "x":
             amend_theta = angular_z - math.pi
             # z값이 이전치와 차이가 어느정도 나면 보정한다.
-            message = "Z방향"
+            message = "X방향"
 
         elif self.dir == "-x":
             angular_z = angular_z if angular_z > math.pi else math.pi * 2 + angular_z
             amend_theta = angular_z - math.pi * 2
-            message = "-Z방향"
+            message = "-X방향"
 
         elif self.dir == "y":
             amend_theta = angular_z - math.pi / 2
@@ -388,7 +458,15 @@ def main(args=None):
     rclpy.init(args=args)
 
     path_node = AStartSearchNode()
-    rclpy.spin(path_node)
+    lidar_node = LidarScanNode()
 
-    path_node.destroy_node()
-    rclpy.shutdown()
+    executor = MultiThreadedExecutor()
+    executor.add_node(path_node)
+    executor.add_node(lidar_node)
+
+    try:
+        executor.spin()
+    finally:
+        executor.shutdown()
+        path_node.destroy_node()
+        rclpy.shutdown()
