@@ -46,6 +46,7 @@
 /unity_ws/*.mdb
 /unity_ws/*.opendb
 /unity_ws/*.VC.db
+/ros_ws/*.pt
 
 # Unity3D generated meta files
 /unity_ws/*.pidb.meta
@@ -78,12 +79,14 @@
 # Mac
 **/.DS_Store
 .vsconfig
-
+log
 ros_ws/build
 ros_ws/install
 ros_ws/log
 ros_ws/src/jetauto_description/meshes
 ros_ws/src/jetauto_description/urdf
-
+unity_ws/Assets/Agarkova_CG
+unity_ws/Assets/Azerilo
+unity_ws/Assets/Agarkova_CG
 /unity_ws/Assets/URDF
 /unity_ws/Assets/Prefebs

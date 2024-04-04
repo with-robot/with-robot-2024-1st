@@ -29,7 +29,7 @@ public class DepthCameraPublisher : MonoBehaviour
             Texture2D texture = new Texture2D(renderTexture.width, renderTexture.height, TextureFormat.RGBA32, false);
             RenderTexture.active = renderTexture;
             texture.ReadPixels(new Rect(0, 0, renderTexture.width, renderTexture.height), 0, 0, false);
-
+     
             ImageMsg img_raw = texture.ToImageMsg(new HeaderMsg());
             ros.Publish(topicName, img_raw);
 

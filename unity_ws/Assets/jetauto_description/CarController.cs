@@ -27,14 +27,7 @@ public class CarController : MonoBehaviour
     [SerializeField] private Transform arm_link3;
     [SerializeField] private Transform arm_link4;
     [SerializeField] private Transform l_in_link;
-    [SerializeField] private Transform l_out_link;
-    [SerializeField] private Transform l_link;
-
-
     [SerializeField] private Transform r_in_link;
-
-    [SerializeField] private Transform r_out_link;
-    [SerializeField] private Transform r_link;
 
     [SerializeField] private WheelCollider colliderFL;
     [SerializeField] private WheelCollider colliderFR;
@@ -65,10 +58,10 @@ public class CarController : MonoBehaviour
     {
         inputs[0] = Input.GetAxis(HORIZONTAL);
         inputs[1] = Input.GetAxis(VERTICAL);
-        inputs[2] = Input.GetKey(KeyCode.R) ? 1 : (Input.GetKey(KeyCode.F) ? -1 : 0);
-        inputs[3] = Input.GetKey(KeyCode.T) ? 1 : (Input.GetKey(KeyCode.G) ? -1 : 0);
-        inputs[4] = Input.GetKey(KeyCode.Y) ? 1 : (Input.GetKey(KeyCode.H) ? -1 : 0);
-        inputs[5] = Input.GetKey(KeyCode.U) ? 1 : (Input.GetKey(KeyCode.J) ? -1 : 0);
+        inputs[2] = Input.GetKey(KeyCode.R) ? -1 : (Input.GetKey(KeyCode.F) ? 1 : 0);
+        inputs[3] = Input.GetKey(KeyCode.T) ? -1 : (Input.GetKey(KeyCode.G) ? 1 : 0);
+        inputs[4] = Input.GetKey(KeyCode.Y) ? -1 : (Input.GetKey(KeyCode.H) ? 1 : 0);
+        inputs[5] = Input.GetKey(KeyCode.U) ? -1 : (Input.GetKey(KeyCode.J) ? 1 : 0);
         inputs[6] = Input.GetKey(KeyCode.I) ? 1 : (Input.GetKey(KeyCode.K) ? -1 : 0);
     }
 
@@ -110,7 +103,7 @@ public class CarController : MonoBehaviour
         UpdateWheel(colliderBR, viewBR);
 
         //
-        if (ValidaeAction(arm_link1.localEulerAngles.y - 90, inputs[2], -170, 170))
+        if (ValidaeAction(arm_link1.localEulerAngles.y - 90, inputs[2], -90, 90))
         {
             arm_link1.Rotate(new Vector3(0, inputs[2], 0));
         }
@@ -129,19 +122,11 @@ public class CarController : MonoBehaviour
         if (ValidaeAction(l_in_link.localEulerAngles.x, inputs[6], 0, 90))
         {
             l_in_link.Rotate(new Vector3(inputs[6], 0, 0));
-            l_link.Rotate(new Vector3(inputs[6], 0, 0));
-            l_out_link.Rotate(new Vector3(-inputs[6], 0, 0));
-
         }
-
         if (ValidaeAction(-r_in_link.localEulerAngles.x, inputs[6], 0, 90))
         {
             r_in_link.Rotate(new Vector3(-inputs[6], 0, 0));
-            r_link.Rotate(new Vector3(-inputs[6], 0, 0));
-            r_out_link.Rotate(new Vector3(inputs[6], 0, 0));
         }
-
-
     }
 
     private void UpdateWheel(WheelCollider col, Transform trans)
@@ -156,16 +141,16 @@ public class CarController : MonoBehaviour
 
     private void CarCallBack(TwistMsg msg)
     {
-        inputs[0] = Mathf.Min(Mathf.Max((float) -msg.angular.z, -1.0f), 1.0f);
-        inputs[1] = Mathf.Min(Mathf.Max((float) msg.linear.x, -1.0f), 1.0f);
+        inputs[0] = Mathf.Min(Mathf.Max((float)-msg.angular.z, -1.0f), 1.0f);
+        inputs[1] = Mathf.Min(Mathf.Max((float)msg.linear.x, -1.0f), 1.0f);
     }
 
     private void ArmCallBack(JointStateMsg msg)
     {
-        inputs[2] = Mathf.Min(Mathf.Max((float)msg.velocity[0], -1.0f), 1.0f);
-        inputs[3] = Mathf.Min(Mathf.Max((float)msg.velocity[1], -1.0f), 1.0f);
-        inputs[4] = Mathf.Min(Mathf.Max((float)msg.velocity[2], -1.0f), 1.0f);
-        inputs[5] = Mathf.Min(Mathf.Max((float)msg.velocity[3], -1.0f), 1.0f);
+        inputs[2] = Mathf.Min(Mathf.Max((float)-msg.velocity[0], -1.0f), 1.0f);
+        inputs[3] = Mathf.Min(Mathf.Max((float)-msg.velocity[1], -1.0f), 1.0f);
+        inputs[4] = Mathf.Min(Mathf.Max((float)-msg.velocity[2], -1.0f), 1.0f);
+        inputs[5] = Mathf.Min(Mathf.Max((float)-msg.velocity[3], -1.0f), 1.0f);
         inputs[6] = Mathf.Min(Mathf.Max((float)msg.velocity[4], -1.0f), 1.0f);
     }
 
