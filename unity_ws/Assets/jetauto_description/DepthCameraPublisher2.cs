@@ -4,9 +4,9 @@ using Unity.Robotics.ROSTCPConnector.MessageGeneration;
 using RosMessageTypes.Sensor;
 using RosMessageTypes.Std;
 
-public class DepthCameraPublisher : MonoBehaviour
+public class DepthCameraPublisher2 : MonoBehaviour
 {
-    [SerializeField] private string topicName = "jetauto/detp_camera/img_raw";
+    [SerializeField] private string topicName = "jetauto/detp_camera/img_raw2";
     [SerializeField] private float publishFrequency = 0.1f;
     [SerializeField] private RenderTexture renderTexture = null;
 
@@ -29,7 +29,7 @@ public class DepthCameraPublisher : MonoBehaviour
             Texture2D texture = new Texture2D(renderTexture.width, renderTexture.height, TextureFormat.RGBA32, false);
             RenderTexture.active = renderTexture;
             texture.ReadPixels(new Rect(0, 0, renderTexture.width, renderTexture.height), 0, 0, false);
-     
+
             ImageMsg img_raw = texture.ToImageMsg(new HeaderMsg());
             ros.Publish(topicName, img_raw);
 
