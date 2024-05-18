@@ -18,17 +18,11 @@ def generate_launch_description():
             )
         ),
     )
-    yolov8_model_path = os.path.join(
-        get_package_share_directory("object_detection"),
-        "resource",
-        "model",
-        "yolov8n.pt",
-    )
     node_object_detection = Node(
         package=package_name,
         executable="object_detection",
         output="screen",
-        parameters=[yolov8_model_path],
+        parameters=[],
     )
 
     node_object_detection_viz = Node(

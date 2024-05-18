@@ -42,7 +42,7 @@ class AStartSearchNode(Node):
 
     ROT_TORQUE = 0.6  # 회전토크
     ROT_THETA = 1.35  # 회전각도크기
-    FWD_TORQUE = 1.0  # 직진방향 토크
+    FWD_TORQUE = 0.4  # 직진방향 토크
 
     # SLAM 맵 10X10
     SLAM_MAP = [
@@ -77,7 +77,7 @@ class AStartSearchNode(Node):
         )
 
         self.srv_jetauto_car = self.create_service(
-            CmdMsg, "jetauto_car/cmd_msg", self.handle_reset
+            CmdMsg, "jetauto_car/cmd_msg", self.send_command
         )
 
         self.get_logger().info(f"AStartpath_searchNode started...")
@@ -100,7 +100,7 @@ class AStartSearchNode(Node):
         self.is_arrived: bool = False
         self.get_logger().info("초기화 처리 완료")
 
-    def handle_reset(self, request, response) -> None:
+    def send_command(self, request, response) -> None:
         self.get_logger().info(f"request: {request}")
         response.success = True
         if request.message == "reset":
@@ -123,12 +123,12 @@ class AStartSearchNode(Node):
 
         # 좌표변환
         new_cor = self._get_cordinate(current_pos)
+        # 도착완료_정지/초기화
         if new_cor == self.dest_pos:
-            # 정지 및 초기화처리
             self.stopat_dest(new_cor)
             return
 
-            # 회전상태 체크
+        # 회전상태 체크
         if self.rotate_state:
             if self.is_rotating(input_msg.twist.angular):
                 return
@@ -267,7 +267,8 @@ class AStartSearchNode(Node):
             * math.log(angle + 1.0)
             / math.log(target_angle + 1.0)
         )
-        return -_torque if _torque > min_torque else -min_torque
+        # return -_torque if _torque > min_torque else -min_torque
+        return -1 * max(_torque, min_torque)
 
     # 몸체 평행상태 조정
     def _amend_h_pos(self, angular) -> tuple:

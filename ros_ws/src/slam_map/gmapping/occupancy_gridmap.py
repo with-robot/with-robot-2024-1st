@@ -52,9 +52,17 @@ class JetautoMapping(Node):
         self.measurement_txt = Path(
             get_package_share_directory("gmapping"), "resource/map/measurement.txt"
         )
+        if self.measurement_txt.exists():
+            self.measurement_txt.unlink()
+
+        self.measurement_txt.touch()
+
         self.pose_txt = Path(
             get_package_share_directory("gmapping"), "resource/map/poses.txt"
         )
+        if self.pose_txt.exists():
+            self.pose_txt.unlink()
+        self.pose_txt.touch()
 
     def lidar_callback(self, msg):
         self.laser_scan = msg
@@ -104,20 +112,25 @@ class JetautoMapping(Node):
                 ### End driving ###
 
                 # Write data for mapping
+                nanoseconds = time.nanoseconds
                 with open(self.measurement_txt, "a") as fp:
-                    fp.write(f"{time.nanoseconds} ")
-                    length = len(self.laser_scan.ranges)
-                    for i in range(length):
-                        fp.write(f"{self.laser_scan.ranges[i]} ")
+                    fp.write(f"{nanoseconds} ")
+                    for d in distances:
+                        fp.write(f"{d:0.1f} ")
                     fp.write(f"\n")
 
+                    # length = len(self.laser_scan.ranges)
+                    # for i in range(length):
+                    #     fp.write(f"{self.laser_scan.ranges[i]} ")
+                    # fp.write(f"\n")
+
                 with open(self.pose_txt, "a") as fp:
-                    fp.write(f"{time.nanoseconds} ")
-                    fp.write(f"{self.odometry.twist.linear.x} ")
-                    fp.write(f"{self.odometry.twist.linear.y} ")
-                    fp.write(f"{self.odometry.twist.linear.z} ")
-                    fp.write(f"{self.odometry.twist.angular.x} ")
-                    fp.write(f"{self.odometry.twist.angular.y} ")
+                    fp.write(f"{nanoseconds} ")
+                    fp.write(f"{self.odometry.twist.linear.x} ")  # z
+                    fp.write(f"{self.odometry.twist.linear.y} ")  # x
+                    # fp.write(f"{self.odometry.twist.linear.z} ")
+                    # fp.write(f"{self.odometry.twist.angular.x} ")
+                    # fp.write(f"{self.odometry.twist.angular.y} ")
                     fp.write(f"{self.odometry.twist.angular.z} ")
                     fp.write(f"\n")
 
