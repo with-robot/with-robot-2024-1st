@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 # Sensor characteristic: Min and Max ranges of the beams
-Zmax = float(5000)
-Zmin = float(170)
+Zmax = float(10)
+Zmin = float(0.3)
 
 # Defining free cells(lfree), occupied cells(locc), unknown cells(l0) log odds values
 l0 = float(0)
@@ -12,16 +12,16 @@ locc = 0.4
 lfree = -0.4
 
 # Grid dimensions
-gridWidth = float(100)
-gridHeight = float(100)
+gridWidth = float(0.1)
+gridHeight = float(0.1)
 
 # Map dimensions
-mapWidth = float(30000)
-mapHeight = float(15000)
+mapWidth = float(10)
+mapHeight = float(10)
 
 # Robot size with respect to the map
-robotXOffset = mapWidth / 5  # 6000
-robotYOffset = mapHeight / 3  # 5000
+robotXOffset = mapWidth / 10  # 6000
+robotYOffset = mapHeight / 10  # 5000
 
 # Defining an l vector to store the log odds values of each cell
 l = [
@@ -36,8 +36,8 @@ def inverseSensorModel(x, y, theta, xi, yi, sensorData):
     # Defining Sensor Characteristics
     # double Zk, thetaK, sensorTheta;
     minDelta = float(-1)
-    alpha = float(200)
-    beta = float(20)
+    alpha = float(1)
+    beta = float(90)
 
     # ******************Compute r and phi**********************
     r = math.sqrt(math.pow(xi - x, 2) + math.pow(yi - y, 2))
@@ -118,7 +118,7 @@ def visualization():
                 plt.plot(x, y, "r.")
 
     # Save the image and close the plot
-    plt.savefig(base_path / "Map1.png")
+    plt.savefig(base_path / "Map5.png")
     plt.clf()
 
 
@@ -137,7 +137,7 @@ while True:
     timeStamp = poses[0]
     robotX = float(poses[1])
     robotY = float(poses[2])
-    robotTheta = float(poses[3])
+    robotTheta = float(poses[3])  # y축
 
     lineMeasure = measurementFile.readline()
     measurements = lineMeasure.strip().split(" ")
@@ -148,9 +148,10 @@ while True:
     for i in range(8):
         measurementData.append(float(measurements[i + 1]))
 
-    result = occupancyGridMapping(
-        robotX, robotY, (robotTheta / 10) * (math.pi / 180), measurementData
-    )
+    result = occupancyGridMapping(robotX, robotY, robotTheta, measurementData)
+    # result = occupancyGridMapping(
+    #     robotX, robotY, (robotTheta / 10) * (math.pi / 180), measurementData
+    # )
     print(f"count:{count}")
     count += 1
     if result == False:
