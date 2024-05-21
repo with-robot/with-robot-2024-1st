@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+import math
+import re
+import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
@@ -9,10 +12,32 @@ from geometry_msgs.msg import TwistStamped, Twist, Vector3
 from yolov8_msgs.srv import CmdMsg
 from sensor_msgs.msg import LaserScan
 from collections import deque
-import math
-import re
-
+from nav_msgs.msg import OccupancyGrid
+from auto_runner.map_transform import occ_gridmap
+from auto_runner.mmr_sampling import find_farthest_coordinate
 laser_scan: LaserScan = None
+grid_map: list[list[int]] = None
+
+
+class GridMap(Node):
+    def __init__(self) -> None:
+        super().__init__("grid_map_node")
+
+        # 기본 콜백 그룹 생성
+        self._default_callback_group = ReentrantCallbackGroup()
+
+        # 맵 수신 10*10
+        self.map_pub = self.create_subscription(
+            OccupancyGrid,
+            "/occ_grid_map",
+            self.receive_map,
+            10,
+        )
+
+    def receive_map(self, map: OccupancyGrid):
+        global grid_map
+        raw_data = np.array(map.data, dtype=np.int8)
+        grid_map = occ_gridmap(raw_data)
 
 
 class LidarScanNode(Node):
@@ -35,14 +60,13 @@ class LidarScanNode(Node):
     def scan_handler(self, msg: LaserScan):
         global laser_scan
         laser_scan = msg
-        # self.get_logger().info(f"laser_scan: {laser_scan}")
 
 
 class AStartSearchNode(Node):
 
     ROT_TORQUE = 0.6  # 회전토크
     ROT_THETA = 1.35  # 회전각도크기
-    FWD_TORQUE = 0.4  # 직진방향 토크
+    FWD_TORQUE = 0.2  # 직진방향 토크
 
     # SLAM 맵 10X10
     SLAM_MAP = [
@@ -84,13 +108,18 @@ class AStartSearchNode(Node):
         self.twist_msg = Twist()
         self.setup()
 
+        # 메시지 발행
+        self.twist_msg.linear = Vector3(x=1.0, y=0.0, z=0.0)
+        self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=0.0)
+        self.pub_jetauto_car.publish(self.twist_msg)
+
     def set_destpos(self, pos: tuple[int, int]) -> None:
         self.dest_pos = pos
         self.amend_h_count: int = 0
         self.is_arrived: bool = False
         self.get_logger().info(f"목적지 설정: {pos}")
 
-    def setup(self) -> None:
+    def setup(self) -> None:        
         self.nanoseconds = 0
         self._change_dir(dir="x", state=False)
         self.dest_pos = (2, 9)
@@ -117,7 +146,10 @@ class AStartSearchNode(Node):
         return response
 
     def unity_tf_sub_callback(self, input_msg: TwistStamped) -> None:
-
+        # 맵수신
+        if not grid_map:
+            return
+        
         # msg로부터 위치정보를 추출
         current_pos = (input_msg.twist.linear.x, input_msg.twist.linear.y)
 
@@ -129,8 +161,9 @@ class AStartSearchNode(Node):
             return
 
         # 회전상태 체크
-        if self.rotate_state:
-            if self.is_rotating(input_msg.twist.angular):
+        if self.rotate_state:            
+            test = self.is_rotating(input_msg.twist.angular)
+            if test:
                 return
 
             self.amend_h_count = 0
@@ -143,13 +176,16 @@ class AStartSearchNode(Node):
 
         self.old_pos = new_cor
 
-        # 네비게이션정보 취득.
-        paths = self.find_path(new_cor, self.dest_pos)
-        self.get_logger().info(f"A* PATH: {paths}")
-
-        if len(paths) == 0:
-            self.get_logger().info(f"길찾기 실패: 목표위치({self.dest_pos})")
-            return
+        # 네비게이션정보 취득.        
+        paths = []        
+        while len(paths)==0:
+            self.get_logger().info(f"목표위치({self.dest_pos})")
+            is_found, paths = self.find_path(new_cor, self.dest_pos)
+            
+            self.get_logger().info(f"A* PATH: {paths}")
+            if is_found:
+                break
+            self.dest_pos = find_farthest_coordinate(grid_map, new_cor)
 
         # 다음번 위치에 대한 토크 및 회전각 취득.
         next_cor = paths[1]
@@ -214,11 +250,12 @@ class AStartSearchNode(Node):
         self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=0.0)
         self.twist_msg.linear = Vector3(x=0.0, y=0.0, z=0.0)
         self.pub_jetauto_car.publish(self.twist_msg)
-        self.is_arrived = True
+        # self.is_arrived = True
 
-    # 회전여부를 파악한다.
+        self.dest_pos = find_farthest_coordinate(grid_map, self.dest_pos)
+
+    # 회전중이며 True 반환.
     def is_rotating(self, angular: object) -> bool:
-
         TARGET_ANGLE = math.pi / 2
 
         def __angle_diff(angle1, angle2):
@@ -242,7 +279,7 @@ class AStartSearchNode(Node):
                 f"angular_diff: {rotation_angle} / {rotation_angle < TARGET_ANGLE * 0.92}"
             )
 
-        return rotation_angle < TARGET_ANGLE * 0.92
+        return rotation_angle < TARGET_ANGLE * 0.85
 
     # break신호
     def send_breakmsg(self, caller: str, torque: float) -> None:
@@ -390,8 +427,10 @@ class AStartSearchNode(Node):
         :param goal: 목표 지점 (x, y)
         :return: 최단 경로
         """
-        self.get_logger().info(f"find_path: {start}, goal: {goal}")
-        grid = self.SLAM_MAP
+        self.get_logger().info(f"find_path: {start}, goal: {goal}, map:{len(grid_map)}")
+        grid = grid_map
+        if not grid:
+            return False, list(start)
         start = (start[0], start[1], self.dir)
 
         frontier = deque()
@@ -404,7 +443,7 @@ class AStartSearchNode(Node):
             if curr_node[:2] == goal:
                 # 초기입력된 방향값 제거
                 path[0] = path[0][:2]
-                return path
+                return True, path
 
             if curr_node in visited:
                 continue
@@ -419,7 +458,7 @@ class AStartSearchNode(Node):
                 (x, y - 1, "-y"),
             ):
                 if (
-                    0 <= next_x < len(grid)
+                    0 <= next_x < len(grid[1])
                     and 0 <= next_y < len(grid[0])
                     and grid[next_x][next_y] != 1
                 ):
@@ -437,8 +476,9 @@ class AStartSearchNode(Node):
                     key=lambda x: len(x[1]) + self._heuristic_distance(x[0][:2], goal),
                 )
             )
-
-        return []
+                        # 초기입력된 방향값 제거
+        path[0] = path[0][:2]
+        return False, path
 
     def _check_if_backpath(self, cur_dir: str, next_dir: str) -> bool:
 
@@ -460,8 +500,10 @@ def main(args=None):
 
     path_node = AStartSearchNode()
     lidar_node = LidarScanNode()
+    grid_node = GridMap()
 
     executor = MultiThreadedExecutor()
+    executor.add_node(grid_node)
     executor.add_node(path_node)
     executor.add_node(lidar_node)
 

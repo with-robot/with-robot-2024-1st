@@ -36,11 +36,11 @@ def generate_launch_description():
         parameters=[],
     )
 
-    node_object_detection = Node(
+    map_make = Node(
         package=package_name3,
         executable="map_make",
         output="screen",
         parameters=[],
     )
 
-    return LaunchDescription([unity_launch, path_find, node_object_detection])
+    return LaunchDescription([unity_launch, path_find, node_object_detection, map_make])

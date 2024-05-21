@@ -18,7 +18,7 @@ setup(
         ("share/" + package_name + "/launch", glob("launch/*.launch.py")),
         (
             os.path.join("share", package_name, "resource"),
-            glob("resource/map/*"),
+            glob("resource/*"),
         ),
     ],
     install_requires=["setuptools"],

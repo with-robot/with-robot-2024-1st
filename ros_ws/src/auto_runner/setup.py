@@ -1,7 +1,7 @@
 from glob import glob
 from setuptools import find_packages, setup
 
-package_name = "path_search"
+package_name = "auto_runner"
 
 setup(
     name=package_name,

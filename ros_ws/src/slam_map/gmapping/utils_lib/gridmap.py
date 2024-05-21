@@ -51,7 +51,8 @@ class GridMap:
         bres_end = [int(end_x), int(end_y)]
         points = list(bresenham_line(bres_start, bres_end, 1))
         
-        if any(x[0] < 0 or x[1] < 0 or x[0] >=limit or x[1]>=limit for x in points):
+        # self.debugger.info(f'(points):{points}')
+        if np.any(x[0] < 0 or x[1] < 0 or x[0] >=limit or x[1]>=limit for x in points):
             points = list(map(lambda x: np.clip(x, 0, limit-1), points))
             # self.debugger.info(f'(x0,y0):({bres_start}), (x1,y1):({bres_end}), (range):{range}')
             # return

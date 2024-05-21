@@ -1,3 +1,4 @@
+import rclpy.logging
 from ultralytics import YOLO
 import rclpy
 from rclpy.node import Node
@@ -9,7 +10,6 @@ from ament_index_python.packages import get_package_share_directory
 import cv2
 import numpy as np
 
-
 bridge = CvBridge()
 
 
@@ -17,12 +17,14 @@ class Camera_subscriber(Node):
 
     def __init__(self):
         super().__init__("object_detection_node")
+        self.get_logger().set_level(rclpy.logging.LoggingSeverity.FATAL)
 
         self.model = YOLO(
             Path(
                 get_package_share_directory("object_detection"),
                 "resource/model/yolov8n.pt",
-            )
+            ),
+            verbose=False
         )
 
         self.yolov8_inference = Yolov8Inference()

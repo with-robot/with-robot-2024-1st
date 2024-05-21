@@ -59,6 +59,9 @@ class GridmapMakeNode(Node):
     def odom_callback(self, msg):
         self.odometry = msg
 
+    def lidar_callback(self, msg):
+        self.laser_scan = msg
+
     def receive_scan(self, scan):
 
         time = Time.from_msg(scan.header.stamp)
@@ -143,7 +146,7 @@ class GridmapMakeNode(Node):
                     # )
 
             # pose와 measurement를 저장한다.
-            self.save_pose_measurement(scan)
+            # self.save_pose_measurement(scan)
 
         except (
             tf2_ros.LookupException,
@@ -219,14 +222,6 @@ class GridmapMakeNode(Node):
         data_str=' '.join(str(x) for x in data)
         with open(self.occ_map_file, "w") as f:
             f.write(data_str)
-
-    def lidar_callback(self, msg):
-        self.laser_scan = msg
-        # self.get_logger().info(f'{msg}')
-
-    def odom_callback(self, msg):
-        self.odometry = msg
-        # self.get_logger().info(f'{msg}')
 
 
 def main(args=None):

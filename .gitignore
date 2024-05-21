@@ -95,3 +95,6 @@ build
 install
 log
 _temp_dir
+mcl
+*.png
+*test*.*
