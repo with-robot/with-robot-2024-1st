@@ -145,8 +145,8 @@ class AStartSearchNode(Node):
 
         return response
 
+    # 로봇 위치/회전정보 callback
     def unity_tf_sub_callback(self, input_msg: TwistStamped) -> None:
-        # 맵수신
         if not grid_map:
             return
         
@@ -210,8 +210,8 @@ class AStartSearchNode(Node):
         self.get_logger().info(f"토크: {x}, 회전: {theta}")
         self.get_logger().info(f"publish_msg: {self.twist_msg}")
 
+    # 로봇이 전방물체와 50cm이내 접근상태이면 True를 반환
     def is_near(self) -> bool:
-        # 로봇이 전방물체와 50cm이내 접근상태이면 True를 반환
         if laser_scan:
             time = Time.from_msg(laser_scan.header.stamp)
             # Run if only laser scan from simulation is updated
