@@ -17,7 +17,7 @@ class Camera_subscriber(Node):
 
     def __init__(self):
         super().__init__("object_detection_node")
-        self.get_logger().set_level(rclpy.logging.LoggingSeverity.FATAL)
+        self.get_logger().set_level(rclpy.logging.LoggingSeverity.UNSET)
 
         self.model = YOLO(
             Path(

@@ -98,3 +98,4 @@ _temp_dir
 mcl
 *.png
 *test*.*
+*.pyc

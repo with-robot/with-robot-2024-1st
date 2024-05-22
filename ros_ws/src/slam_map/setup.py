@@ -16,22 +16,18 @@ setup(
         ),
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/launch", glob("launch/*.launch.py")),
-        (
-            os.path.join("share", package_name, "resource"),
-            glob("resource/*"),
-        ),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
-    maintainer="cchyun",
-    maintainer_email="cchyun@todo.todo",
+    maintainer="michael kwon",
+    maintainer_email="c4now@naver.com",
     description="TODO: Package description",
     license="TODO: License declaration",
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             f"occupancy_gridmap = {package_name}.occupancy_gridmap:main",
-            f"map_make = {package_name}.map_making:main",
+            f"create_map = {package_name}.gridmap_create:main",
         ],
     },
 )

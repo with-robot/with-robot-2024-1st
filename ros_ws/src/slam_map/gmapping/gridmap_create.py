@@ -14,7 +14,7 @@ import numpy as np
 import os
 
 
-class GridmapMakeNode(Node):
+class GridmapPubNode(Node):
     def __init__(self, scan_topic, world_frame_id, cell_size):
         super().__init__("gridmap_make_node")
 
@@ -227,7 +227,7 @@ class GridmapMakeNode(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    driver = GridmapMakeNode(
+    driver = GridmapPubNode(
         scan_topic="jetauto/scan", world_frame_id="odom", cell_size=0.1
     )
     rclpy.spin(driver)

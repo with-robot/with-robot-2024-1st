@@ -15,6 +15,8 @@ from collections import deque
 from nav_msgs.msg import OccupancyGrid
 from auto_runner.map_transform import occ_gridmap
 from auto_runner.mmr_sampling import find_farthest_coordinate
+from auto_runner.lib import path_algorithm, car_drive, common
+
 laser_scan: LaserScan = None
 grid_map: list[list[int]] = None
 
@@ -113,13 +115,20 @@ class AStartSearchNode(Node):
         self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=0.0)
         self.pub_jetauto_car.publish(self.twist_msg)
 
+        self.robot_cntl = car_drive.RobotCntrolMange(
+            self, common.Dir.Up, logger=self.get_logger()
+        )
+        self.path_man = path_algorithm.PathDecideMange(
+            algorithm="a-start", logger=self.get_logger()
+        )
+
     def set_destpos(self, pos: tuple[int, int]) -> None:
         self.dest_pos = pos
         self.amend_h_count: int = 0
         self.is_arrived: bool = False
         self.get_logger().info(f"목적지 설정: {pos}")
 
-    def setup(self) -> None:        
+    def setup(self) -> None:
         self.nanoseconds = 0
         self._change_dir(dir="x", state=False)
         self.dest_pos = (2, 9)
@@ -145,11 +154,57 @@ class AStartSearchNode(Node):
 
         return response
 
+    def unity_tf_sub_callback(
+        self, msg: TwistStamped
+    ) -> None:  # msg로부터 위치정보를 추출
+        if not grid_map:
+            return
+        __rc = self.robot_cntl
+        __pm = self.path_man
+        __rc.new_pose = (msg.twist.linear.x, msg.twist.linear.y)  # x,y좌표
+        __rc.new_angular = msg.twist.angular.z  # 좌우회전각도
+
+        # 좌표설정
+        new_cor = __pm.xy_cord(__rc.new_pose)
+
+        # 도착하면 새로운 목적지 생성
+        __pm.arrived(new_cor)
+
+        if __rc.current_state == common.State.ROTATING:
+            if __rc.check_rotation(new_cor):
+                return
+
+        elif new_cor == self.old_pos:
+            __rc.check_straight()
+            return
+        
+        elif self.is_near():
+            # 급 감속
+            self.send_message("#### 급 감속 ####", x = -self.FWD_TORQUE * 4 / 5)
+
+        # 목표점 유효여부 판단
+        next_cor =__pm.check_and_dest(new_cor, self.dest_pos, __rc.cur_dir)
+
+        # 로봇 다음동작 취득
+        x, theta = __rc.next_action(next_cor)
+
+        if __rc.cur_dir in [common.Dir.RIGHT, common.Dir.LEFT]:
+            self.send_message("#### 회전구간 감속 ####", x = -self.FWD_TORQUE * 3 / 5)
+
+        # 지시메시지 발행
+        self.send_message(x, theta)
+
+    def send_message(self, title:str=None, x: float = 0.0, theta: float = 0.0) -> None:
+        self.get_logger().info(f"#### {title} ### torque:{x}, angular:{theta} ####")
+        self.twist_msg.linear = Vector3(x=x, y=0.0, z=0.0)
+        self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=theta)
+        self.pub_jetauto_car.publish(self.twist_msg)
+
     # 로봇 위치/회전정보 callback
     def unity_tf_sub_callback(self, input_msg: TwistStamped) -> None:
         if not grid_map:
             return
-        
+
         # msg로부터 위치정보를 추출
         current_pos = (input_msg.twist.linear.x, input_msg.twist.linear.y)
 
@@ -161,7 +216,7 @@ class AStartSearchNode(Node):
             return
 
         # 회전상태 체크
-        if self.rotate_state:            
+        if self.rotate_state:
             test = self.is_rotating(input_msg.twist.angular)
             if test:
                 return
@@ -176,12 +231,12 @@ class AStartSearchNode(Node):
 
         self.old_pos = new_cor
 
-        # 네비게이션정보 취득.        
-        paths = []        
-        while len(paths)==0:
+        # 네비게이션정보 취득.
+        paths = []
+        while len(paths) == 0:
             self.get_logger().info(f"목표위치({self.dest_pos})")
             is_found, paths = self.find_path(new_cor, self.dest_pos)
-            
+
             self.get_logger().info(f"A* PATH: {paths}")
             if is_found:
                 break
@@ -476,7 +531,7 @@ class AStartSearchNode(Node):
                     key=lambda x: len(x[1]) + self._heuristic_distance(x[0][:2], goal),
                 )
             )
-                        # 초기입력된 방향값 제거
+            # 초기입력된 방향값 제거
         path[0] = path[0][:2]
         return False, path
 

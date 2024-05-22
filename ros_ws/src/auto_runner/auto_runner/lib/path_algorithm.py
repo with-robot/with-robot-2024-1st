@@ -1,36 +1,90 @@
 from collections import deque
 from typing import Sequence
-from enum import Enum
-import re
+from auto_runner.lib.common import Dir
+import re, math
 
-class Dir(Enum):
-    UP = '^'
-    DOWN = 'v'
-    LEFT = '<'
-    RIGHT = '>'
 
-class AStarPathFinder:
-    is_found:bool
+class PathDecideMange:
+    is_found: bool
+    grid_map: list[Sequence[int]]
 
-    def __init__(self, algorithm:str='a-star', logger:object=None) -> None:
-        self.algorithm= algorithm
+    def __init__(
+        self,
+        algorithm: str = "a-star",
+        dest_pos: tuple = (-1, -1),
+        logger: object = None,
+    ) -> None:
+        self.algorithm = algorithm
         self.is_found = False
         self.logger = logger
         self.dir = Dir.DOWN
-    
-    def set_map(self, map:list[Sequence[int]]) -> None:
+        self.grid_map = []
+        self.dest_pos = dest_pos
+        self.paths = []
+
+    def set_map(self, map: list[Sequence[int]]) -> None:
         self.grid_map = map
 
     def logging(self, message) -> None:
         if self.logger:
             self.logger.info(message)
-    
-    def change_dir(self, dir:Dir) -> None:
-        self.dir = dir
 
-    # a* search
-    def find_path(
-        self, start: tuple[int, int], goal: tuple[int, int]
+    # 도착위치이면 새로운 도착위치를 반환한다.
+    def arrived(self, new_cor):
+        if self.dest_pos != new_cor:
+            return
+
+        self.dest_pos = None
+        self.check_and_dest(new_cor, self.dir)
+
+    def find_path(self, **kwargs):
+        if self.algorithm == "a-star":
+            return self._astar_method(**kwargs)
+        else:
+            return []
+
+    def check_pose_error(self, new_cor):
+        if any(x for x in self.map if x == new_cor):
+            return False
+
+        return True
+
+    # 도착위치 평가하고, 다음위치 계산
+    def check_and_dest(self, new_cor, cur_dir):
+
+        if not self.check_pose_error(new_cor):
+            return self.dest_pos
+        
+        from auto_runner.mmr_sampling import find_farthest_coordinate
+
+        dest_pos = self.dest_pos or find_farthest_coordinate(self.grid_map, new_cor)
+        paths = []
+        while len(paths) == 0:
+            self.logger().info(f"목표위치({dest_pos})")
+            paths = self.find_path(new_cor, dest_pos, cur_dir)
+
+            self.logger().info(f"A* PATH: {paths}")
+            if len(paths) > 0:
+                break
+
+            dest_pos = find_farthest_coordinate(self.grid_map, new_cor)
+
+        # 다음위치
+        self.dest_pos = dest_pos
+        self.paths = paths
+        return paths[1]
+
+    def xy_cord(self, pose: tuple[float, float]) -> tuple[int, int]:
+        # PC 맵 좌표를 SLAM 맵 좌표로 변환
+        _x = math.floor(5.0 - pose[0])  # x
+        _y = math.floor(5.0 - pose[1])  # y
+
+        result = (_x if _x > 0 else 0, _y if _y > 0 else 0)
+        return result
+
+    # a* method
+    def _astar_method(
+        self, start: tuple[int, int], goal: tuple[int, int], init_dir: Dir = Dir.UP
     ) -> list[Sequence[int]]:
         """
         A* 알고리즘을 사용하여 최단 경로를 찾습니다.
@@ -40,23 +94,25 @@ class AStarPathFinder:
         :return: 최단 경로
         """
         self.logging(f"find_path: {start}, goal: {goal}, map:{len(self.grid_map)}")
+        self.is_found = False
 
         if not self.grid_map:
-            return False, list(start)
-        
+            return []
+
         frontier = deque()
         visited = set()  # 방문한 노드 집합
 
-        start = (start[0], start[1], self.dir)
+        start = (start[0], start[1], init_dir)
         frontier.append((start, [start]))  # 큐에 시작 위치와 경로 추가
 
         while frontier:
             curr_node, path = frontier.popleft()
 
             if curr_node[:2] == goal:
+                self.is_found = True
                 # 초기입력된 방향값 제거
                 path[0] = path[0][:2]
-                return True, path
+                return path
 
             if curr_node in visited:
                 continue
@@ -89,17 +145,16 @@ class AStarPathFinder:
                     key=lambda x: len(x[1]) + self._heuristic_distance(x[0][:2], goal),
                 )
             )
-        # 초기입력된 방향값 제거
-        path[0] = path[0][:2]
-        return False, path
-    
+
+        return []
+
     # 방향 제한조건
     def _check_if_backpath(self, cur_dir: str, next_dir: str) -> bool:
         # -xx or x-x 패턴
         pattern = re.compile(r"^-(.)\1$|^(.)-\2$")
         # 후진 경로 배제
         return pattern.match(f"{cur_dir}{next_dir}") is not None
-    
+
     # 목표지점까지 추정거리
     def _heuristic_distance(self, start_pos, end_pos) -> int:
         """
