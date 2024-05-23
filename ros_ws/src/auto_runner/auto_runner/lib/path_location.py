@@ -1,41 +1,28 @@
 from collections import deque
-from typing import Sequence
-from auto_runner.lib.common import Dir
+from auto_runner.lib.common import Dir, MessageHandler, TypeVar, Sequence
 import re, math
 
+LoggableNode = TypeVar('LoggableNode', bound=MessageHandler)
 
 class PathDecideMange:
+    """맵과 위치정보에 대한 책임을 갖는다"""
+
     is_found: bool
     grid_map: list[Sequence[int]]
 
     def __init__(
         self,
+        node:LoggableNode,
         algorithm: str = "a-star",
         dest_pos: tuple = (-1, -1),
-        logger: object = None,
     ) -> None:
-        self.algorithm = algorithm
+        self.node = node
         self.is_found = False
-        self.logger = logger
-        self.dir = Dir.DOWN
         self.grid_map = []
-        self.dest_pos = dest_pos
         self.paths = []
-
-    def set_map(self, map: list[Sequence[int]]) -> None:
-        self.grid_map = map
-
-    def logging(self, message) -> None:
-        if self.logger:
-            self.logger.info(message)
-
-    # 도착위치이면 새로운 도착위치를 반환한다.
-    def arrived(self, new_cor):
-        if self.dest_pos != new_cor:
-            return
-
-        self.dest_pos = None
-        self.check_and_dest(new_cor, self.dir)
+        self.dir = Dir.DOWN
+        self.algorithm = algorithm
+        self.dest_pos = dest_pos
 
     def find_path(self, **kwargs):
         if self.algorithm == "a-star":
@@ -43,38 +30,44 @@ class PathDecideMange:
         else:
             return []
 
-    def check_pose_error(self, new_cor):
-        if any(x for x in self.map if x == new_cor):
-            return False
+    def update_map(self, map: list[Sequence[int]]) -> None:
+        self.grid_map = map
 
-        return True
+    # 도착위치이면 새로운 도착위치를 반환한다.
+    def arrived(self, new_cor):
+        if self.dest_pos != new_cor:
+            return
+
+        self.dest_pos = None
+        self.check_and_dest(new_cor)
 
     # 도착위치 평가하고, 다음위치 계산
-    def check_and_dest(self, new_cor, cur_dir):
+    def check_and_dest(self, cur_pos) -> tuple[int,int]:
 
-        if not self.check_pose_error(new_cor):
+        if not self._check_pose_error(cur_pos):
             return self.dest_pos
-        
-        from auto_runner.mmr_sampling import find_farthest_coordinate
 
-        dest_pos = self.dest_pos or find_farthest_coordinate(self.grid_map, new_cor)
+        from auto_runner import mmr_sampling
+
+        dest_pos = self.dest_pos or mmr_sampling.find_farthest_coordinate(self.grid_map, cur_pos)
         paths = []
         while len(paths) == 0:
             self.logger().info(f"목표위치({dest_pos})")
-            paths = self.find_path(new_cor, dest_pos, cur_dir)
+            paths = self.find_path(cur_pos, dest_pos, self.cur_dir)
 
             self.logger().info(f"A* PATH: {paths}")
             if len(paths) > 0:
                 break
 
-            dest_pos = find_farthest_coordinate(self.grid_map, new_cor)
+            dest_pos = mmr_sampling.find_farthest_coordinate(self.grid_map, cur_pos)
 
-        # 다음위치
         self.dest_pos = dest_pos
         self.paths = paths
+        # 다음위치 반환
         return paths[1]
 
-    def xy_cord(self, pose: tuple[float, float]) -> tuple[int, int]:
+    # 위치값을 맵좌표로 변환
+    def transfer2_xy(self, pose: tuple[float, float]) -> tuple[int, int]:
         # PC 맵 좌표를 SLAM 맵 좌표로 변환
         _x = math.floor(5.0 - pose[0])  # x
         _y = math.floor(5.0 - pose[1])  # y
@@ -93,7 +86,7 @@ class PathDecideMange:
         :param goal: 목표 지점 (x, y)
         :return: 최단 경로
         """
-        self.logging(f"find_path: {start}, goal: {goal}, map:{len(self.grid_map)}")
+        self.node._logging(f"find_path: {start}, goal: {goal}, map:{len(self.grid_map)}")
         self.is_found = False
 
         if not self.grid_map:
@@ -122,7 +115,7 @@ class PathDecideMange:
             x, y, cur_d = curr_node
             for next_x, next_y, next_d in (
                 (x + 1, y, Dir.UP),
-                (x - 1, y, Dir.Down),
+                (x - 1, y, Dir.DOWN),
                 (x, y + 1, Dir.RIGHT),
                 (x, y - 1, Dir.LEFT),
             ):
@@ -163,3 +156,10 @@ class PathDecideMange:
         (x1, y1) = start_pos
         (x2, y2) = end_pos
         return abs(x1 - x2) + abs(y1 - y2)
+
+    # 경로이탈 여부
+    def _check_pose_error(self, new_cor):
+        if any(x for x in self.map if x == new_cor):
+            return False
+
+        return True

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import math
 import re
 import numpy as np
@@ -9,13 +8,14 @@ from rclpy.time import Time
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
 from geometry_msgs.msg import TwistStamped, Twist, Vector3
+from ros_ws.src.auto_runner.auto_runner.lib import path_location
 from yolov8_msgs.srv import CmdMsg
 from sensor_msgs.msg import LaserScan
 from collections import deque
 from nav_msgs.msg import OccupancyGrid
 from auto_runner.map_transform import occ_gridmap
 from auto_runner.mmr_sampling import find_farthest_coordinate
-from auto_runner.lib import path_algorithm, car_drive, common
+from auto_runner.lib import car_drive, common
 
 laser_scan: LaserScan = None
 grid_map: list[list[int]] = None
@@ -115,12 +115,8 @@ class AStartSearchNode(Node):
         self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=0.0)
         self.pub_jetauto_car.publish(self.twist_msg)
 
-        self.robot_cntl = car_drive.RobotCntrolMange(
-            self, common.Dir.Up, logger=self.get_logger()
-        )
-        self.path_man = path_algorithm.PathDecideMange(
-            algorithm="a-start", logger=self.get_logger()
-        )
+        self.robot_cntl = car_drive.RobotCntrolMange(self, common.Dir.Up)
+        self.path_man = path_location.PathDecideMange(self, algorithm="a-start")
 
     def set_destpos(self, pos: tuple[int, int]) -> None:
         self.dest_pos = pos
@@ -161,44 +157,38 @@ class AStartSearchNode(Node):
             return
         __rc = self.robot_cntl
         __pm = self.path_man
-        __rc.new_pose = (msg.twist.linear.x, msg.twist.linear.y)  # x,y좌표
-        __rc.new_angular = msg.twist.angular.z  # 좌우회전각도
+          # x,y좌표, 좌우회전각도
+        __rc.sensordata(msg)
 
         # 좌표설정
-        new_cor = __pm.xy_cord(__rc.new_pose)
+        new_cor = __pm.transfer2_xy(__rc.new_pose)
 
         # 도착하면 새로운 목적지 생성
         __pm.arrived(new_cor)
 
-        if __rc.current_state == common.State.ROTATING:
+        if __rc.new_state == common.State.ROTATING:
             if __rc.check_rotation(new_cor):
                 return
 
         elif new_cor == self.old_pos:
             __rc.check_straight()
             return
-        
+
         elif self.is_near():
             # 급 감속
-            self.send_message("#### 급 감속 ####", x = -self.FWD_TORQUE * 4 / 5)
+            self._send_message("#### 급 감속 ####", x=-self.FWD_TORQUE * 4 / 5)
 
         # 목표점 유효여부 판단
-        next_cor =__pm.check_and_dest(new_cor, self.dest_pos, __rc.cur_dir)
+        next_cor = __pm.check_and_dest(new_cor, self.dest_pos, __rc.dir_data.new)
 
         # 로봇 다음동작 취득
         x, theta = __rc.next_action(next_cor)
 
-        if __rc.cur_dir in [common.Dir.RIGHT, common.Dir.LEFT]:
-            self.send_message("#### 회전구간 감속 ####", x = -self.FWD_TORQUE * 3 / 5)
+        if __rc.new_dir in [common.Dir.RIGHT, common.Dir.LEFT]:
+            self._send_message("#### 회전구간 감속 ####", x=-self.FWD_TORQUE * 3 / 5)
 
         # 지시메시지 발행
-        self.send_message(x, theta)
-
-    def send_message(self, title:str=None, x: float = 0.0, theta: float = 0.0) -> None:
-        self.get_logger().info(f"#### {title} ### torque:{x}, angular:{theta} ####")
-        self.twist_msg.linear = Vector3(x=x, y=0.0, z=0.0)
-        self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=theta)
-        self.pub_jetauto_car.publish(self.twist_msg)
+        self._send_message(x, theta)
 
     # 로봇 위치/회전정보 callback
     def unity_tf_sub_callback(self, input_msg: TwistStamped) -> None:
@@ -548,6 +538,18 @@ class AStartSearchNode(Node):
         (x1, y1) = a
         (x2, y2) = b
         return abs(x1 - x2) + abs(y1 - y2)
+
+    def _send_message(
+        self, title: str = None, x: float = 0.0, theta: float = 0.0
+    ) -> None:
+        self.get_logger().info(f"#### {title} ### torque:{x}, angular:{theta} ####")
+        self.twist_msg.linear = Vector3(x=x, y=0.0, z=0.0)
+        self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=theta)
+        self.pub_jetauto_car.publish(self.twist_msg)
+
+    def _logging(self, message) -> None:
+        if self.logger:
+            self.logger.info(message)
 
 
 def main(args=None):
