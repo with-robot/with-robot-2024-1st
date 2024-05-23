@@ -2,30 +2,32 @@ import numpy as np
 import random
 import math
 
+
 def euclidean_distance(a, b):
     return np.linalg.norm(a - b)
 
 
-def find_farthest_coordinate(map:list, cord:tuple):
-    x, y = cord
-    # 임의로 10개의 좌표 생성
+def find_farthest_coordinate(map: list, base: tuple) -> tuple:
+    x, y = base
+    # 맵에서 빈셀들을 선택
     arr = np.array(map)
-    coordinates = []
+    cordinates = []
     for i in range(arr.shape[0]):
         for j in range(arr.shape[1]):
             if arr[i, j] == 0:
-                coordinates.append((i, j))           
-    
+                cordinates.append((i, j))
+
     # 입력 좌표와 다른 좌표들 간의 거리를 계산
     distances = []
-    for coord in coordinates:
-        distance = math.sqrt((coord[0] - x)**2 + (coord[1] - y)**2)
-        distances.append((coord, distance))
-    
+    for cord in cordinates:
+        distance = math.sqrt((cord[0] - x) ** 2 + (cord[1] - y) ** 2)
+        distances.append((cord, distance))
+
     # 거리가 가장 먼 좌표 찾기
     farthest_coordinate = max(distances, key=lambda x: x[1])
-    
-    return farthest_coordinate[0] if distance else cord
+
+    return farthest_coordinate[0] if farthest_coordinate else base
+
 
 def mmr_sampling(array, initial_sample, num_samples):
     flattened_array = array.flatten()
@@ -39,23 +41,27 @@ def mmr_sampling(array, initial_sample, num_samples):
     for _ in range(1, num_samples):
         best_candidate = -1
         max_margin = -np.inf
-        
+
         for i in range(num_elements):
             if i in sampled_indices:
                 continue
-            
-            min_distance_to_sampled = min(euclidean_distance(flattened_array[i], flattened_array[j]) for j in sampled_indices)
+
+            min_distance_to_sampled = min(
+                euclidean_distance(flattened_array[i], flattened_array[j])
+                for j in sampled_indices
+            )
             margin = min_distance_to_sampled
 
             if margin > max_margin:
                 max_margin = margin
                 best_candidate = i
-        
+
         sampled_indices.append(best_candidate)
-    
+
     return flattened_array[sampled_indices]
 
-if __name__=='__main__':
+
+if __name__ == "__main__":
     # # 10x10 배열 생성
     # array = np.random.random((10, 10))
 

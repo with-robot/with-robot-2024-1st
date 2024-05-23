@@ -8,14 +8,13 @@ from rclpy.time import Time
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.callback_groups import ReentrantCallbackGroup
 from geometry_msgs.msg import TwistStamped, Twist, Vector3
-from ros_ws.src.auto_runner.auto_runner.lib import path_location
 from yolov8_msgs.srv import CmdMsg
 from sensor_msgs.msg import LaserScan
 from collections import deque
 from nav_msgs.msg import OccupancyGrid
 from auto_runner.map_transform import occ_gridmap
 from auto_runner.mmr_sampling import find_farthest_coordinate
-from auto_runner.lib import car_drive, common
+from auto_runner.lib import car_drive, common, path_location
 
 laser_scan: LaserScan = None
 grid_map: list[list[int]] = None
@@ -115,7 +114,7 @@ class AStartSearchNode(Node):
         self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=0.0)
         self.pub_jetauto_car.publish(self.twist_msg)
 
-        self.robot_cntl = car_drive.RobotCntrolMange(self, common.Dir.Up)
+        self.robot_cntl = car_drive.RobotCntrolMange(self, common.Dir.X)
         self.path_man = path_location.PathDecideMange(self, algorithm="a-start")
 
     def set_destpos(self, pos: tuple[int, int]) -> None:
@@ -157,41 +156,42 @@ class AStartSearchNode(Node):
             return
         __rc = self.robot_cntl
         __pm = self.path_man
-          # x,y좌표, 좌우회전각도
+          # 센서 데이터
         __rc.sensordata(msg)
+        __pm.update_map(grid_map)
 
         # 좌표설정
-        new_cor = __pm.transfer2_xy(__rc.new_pose)
+        cur_pos = __pm.transfer2_xy(__rc.pos_data.cur)
 
         # 도착하면 새로운 목적지 생성
-        __pm.arrived(new_cor)
+        __pm.arrived(cur_pos)
 
-        if __rc.new_state == common.State.ROTATING:
-            if __rc.check_rotation(new_cor):
-                return
+        if __rc.state_data.cur == common.State.ROTATING:
+            if __rc.is_rotating():
+                return            
 
-        elif new_cor == self.old_pos:
+        elif __rc.is_same_pos(__pm.transfer2_xy):
             __rc.check_straight()
             return
 
         elif self.is_near():
             # 급 감속
-            self._send_message("#### 급 감속 ####", x=-self.FWD_TORQUE * 4 / 5)
+            self._send_message(title="급감속", x=-self.FWD_TORQUE * 4 / 5)
 
         # 목표점 유효여부 판단
-        next_cor = __pm.check_and_dest(new_cor, self.dest_pos, __rc.dir_data.new)
+        next_pos = __pm.check_and_dest(cur_pos, __rc.dir_data.cur)
 
-        # 로봇 다음동작 취득
-        x, theta = __rc.next_action(next_cor)
+        # 로봇 다음동작
+        x, theta = __rc.next_action(cur_pos, next_pos)
 
-        if __rc.new_dir in [common.Dir.RIGHT, common.Dir.LEFT]:
-            self._send_message("#### 회전구간 감속 ####", x=-self.FWD_TORQUE * 3 / 5)
+        # if __rc.state_data.cur == common.State.ROTATING:
+        #     self._send_message(title="회전전 감속", x=-self.FWD_TORQUE * 3 / 5)
 
         # 지시메시지 발행
-        self._send_message(x, theta)
+        self._send_message(title='주행지시', x= x, theta=theta)
 
     # 로봇 위치/회전정보 callback
-    def unity_tf_sub_callback(self, input_msg: TwistStamped) -> None:
+    def unity_tf_sub_callback1(self, input_msg: TwistStamped) -> None:
         if not grid_map:
             return
 
@@ -540,7 +540,7 @@ class AStartSearchNode(Node):
         return abs(x1 - x2) + abs(y1 - y2)
 
     def _send_message(
-        self, title: str = None, x: float = 0.0, theta: float = 0.0
+        self, *, title: str = None, x: float = 0.0, theta: float = 0.0
     ) -> None:
         self.get_logger().info(f"#### {title} ### torque:{x}, angular:{theta} ####")
         self.twist_msg.linear = Vector3(x=x, y=0.0, z=0.0)
@@ -548,8 +548,7 @@ class AStartSearchNode(Node):
         self.pub_jetauto_car.publish(self.twist_msg)
 
     def _logging(self, message) -> None:
-        if self.logger:
-            self.logger.info(message)
+        self.get_logger().info(message)
 
 
 def main(args=None):

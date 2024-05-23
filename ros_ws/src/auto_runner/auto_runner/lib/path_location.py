@@ -20,7 +20,7 @@ class PathDecideMange:
         self.is_found = False
         self.grid_map = []
         self.paths = []
-        self.dir = Dir.DOWN
+        self.cur_dir = Dir.X
         self.algorithm = algorithm
         self.dest_pos = dest_pos
 
@@ -34,28 +34,31 @@ class PathDecideMange:
         self.grid_map = map
 
     # 도착위치이면 새로운 도착위치를 반환한다.
-    def arrived(self, new_cor):
-        if self.dest_pos != new_cor:
+    def arrived(self, cur_pos):
+        if self.dest_pos != cur_pos:
             return
+        self.node._logging(f'arrived>> pos:{cur_pos}')
 
         self.dest_pos = None
-        self.check_and_dest(new_cor)
+        self.check_and_dest(cur_pos)
 
     # 도착위치 평가하고, 다음위치 계산
-    def check_and_dest(self, cur_pos) -> tuple[int,int]:
-
-        if not self._check_pose_error(cur_pos):
-            return self.dest_pos
+    def check_and_dest(self, cur_pos, cur_dir=None) -> tuple[int,int]:
+        self.node._logging(f'<<check_and_dest>> pos:{cur_pos}, dir:{cur_dir}')
+        
+        self.cur_dir = cur_dir or self.cur_dir
+        # if cur_pos == self.dest_pos:
+        #     return self.dest_pos
 
         from auto_runner import mmr_sampling
 
         dest_pos = self.dest_pos or mmr_sampling.find_farthest_coordinate(self.grid_map, cur_pos)
         paths = []
         while len(paths) == 0:
-            self.logger().info(f"목표위치({dest_pos})")
-            paths = self.find_path(cur_pos, dest_pos, self.cur_dir)
+            self.node._logging(f"목표위치: {dest_pos}")
+            paths = self._astar_method(cur_pos, dest_pos, cur_dir)
 
-            self.logger().info(f"A* PATH: {paths}")
+            self.node._logging(f"A* PATH: {paths}")
             if len(paths) > 0:
                 break
 
@@ -77,7 +80,7 @@ class PathDecideMange:
 
     # a* method
     def _astar_method(
-        self, start: tuple[int, int], goal: tuple[int, int], init_dir: Dir = Dir.UP
+        self, start: tuple[int, int], goal: tuple[int, int], init_dir: Dir = Dir.X
     ) -> list[Sequence[int]]:
         """
         A* 알고리즘을 사용하여 최단 경로를 찾습니다.
@@ -114,10 +117,10 @@ class PathDecideMange:
 
             x, y, cur_d = curr_node
             for next_x, next_y, next_d in (
-                (x + 1, y, Dir.UP),
-                (x - 1, y, Dir.DOWN),
-                (x, y + 1, Dir.RIGHT),
-                (x, y - 1, Dir.LEFT),
+                (x + 1, y, Dir.X),
+                (x - 1, y, Dir.NX),
+                (x, y + 1, Dir.Y),
+                (x, y - 1, Dir.NY),
             ):
                 if (
                     0 <= next_x < len(self.grid_map[1])
@@ -159,7 +162,7 @@ class PathDecideMange:
 
     # 경로이탈 여부
     def _check_pose_error(self, new_cor):
-        if any(x for x in self.map if x == new_cor):
+        if any(x for x in self.grid_map if x == new_cor):
             return False
 
         return True
