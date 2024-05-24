@@ -118,9 +118,9 @@ class PathDecideMange:
             x, y, cur_d = curr_node
             for next_x, next_y, next_d in (
                 (x + 1, y, Dir.X),
-                (x - 1, y, Dir.NX),
+                (x - 1, y, Dir._X),
                 (x, y + 1, Dir.Y),
-                (x, y - 1, Dir.NY),
+                (x, y - 1, Dir._Y),
             ):
                 if (
                     0 <= next_x < len(self.grid_map[1])
