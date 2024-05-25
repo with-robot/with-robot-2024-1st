@@ -39,47 +39,40 @@ class RobotController:
     def next_action(self, cur_pos:tuple, next_pos: tuple) -> tuple[float, float]:
         self.node._logging(f"next_pose: {next_pos}")
 
-        ROT_TORQUE = self.rotate_torque[0]
-        FWD_TORQUE = self.fwd_torque[1]
-        ROT_ANGLE = self.rot_angle_ccw
-
+        LEFT_TURN = (self.rotate_torque[0], self.rot_angle_ccw)
+        RIGHT_TURN = (self.rotate_torque[0], -self.rot_angle_ccw)
+        MOVE_FWD = (self.fwd_torque[0], 0.0)
+        MOVE_BWD = (-self.fwd_torque[0], 0.0)
         x0, y0 = cur_pos
         x1, y1 = next_pos
 
         _next_dir=_cur_dir=self.dir_data.cur
         
-        _torq_ang = FWD_TORQUE, 0.0  # 직진
+        _torq_ang = self.fwd_torque[1], 0.0  # 직진
+        _next_dir = self.dir_data.cur
         if _cur_dir == Dir.X:
             if y1 > y0:
-                _torq_ang = ROT_TORQUE, ROT_ANGLE  # 좌회전
-                _next_dir = Dir.Y
+                _torq_ang,_next_dir = LEFT_TURN, Dir.Y  # 좌회전
             elif y1 < y0:
-                _torq_ang = ROT_TORQUE, -ROT_ANGLE  # 우회전
-                _next_dir = Dir._Y
+                _torq_ang,_next_dir = RIGHT_TURN, Dir._Y  # 우회전
 
         elif _cur_dir == Dir._X:
             if y1 > y0:
-                _torq_ang = ROT_TORQUE, -ROT_ANGLE  # 우회전
-                _next_dir = Dir.Y
+                _torq_ang, _next_dir = RIGHT_TURN, Dir.Y  # 우회전
             elif y1 < y0:
-                _torq_ang = ROT_TORQUE, ROT_ANGLE  # 좌회전
-                _next_dir = Dir._Y
+                _torq_ang, _next_dir = LEFT_TURN, Dir._Y  # 좌회전
 
         elif _cur_dir == Dir.Y:
             if x1 > x0:
-                _torq_ang = ROT_TORQUE, -ROT_ANGLE  # 우회전
-                _next_dir = Dir.X
+                _torq_ang, _next_dir = RIGHT_TURN, Dir.X  # 우회전
             elif x1 < x0:
-                _torq_ang = ROT_TORQUE, ROT_ANGLE  # 좌회전
-                _next_dir = Dir._X
+                _torq_ang, _next_dir = LEFT_TURN, Dir._X  # 좌회전
 
         elif _cur_dir == Dir._Y:
             if x1 > x0:
-                _torq_ang = ROT_TORQUE, ROT_ANGLE  # 좌회전
-                _next_dir = Dir.X
+                _torq_ang, _next_dir = LEFT_TURN, Dir.X  # 좌회전
             elif x1 < x0:
-                _torq_ang = ROT_TORQUE, -ROT_ANGLE  # 우회전
-                _next_dir = Dir._X
+                _torq_ang, _next_dir = LEFT_TURN, Dir._X  # 우회전
 
         if _torq_ang[1] != 0.0:
             self.state_data.shift(State.ROTATING)
