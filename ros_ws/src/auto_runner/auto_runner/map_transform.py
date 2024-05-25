@@ -69,7 +69,7 @@ def pre_process(data) -> np.array:
     # for row in range(2, data.shape[0] - 2):
     #     for col in range(2, data.shape[1] - 2):
     #         sub_data = data[row - 2:row + 3, col - 2:col + 3]
-    #         if np.bitwise_and(sub_data.astype(np.int8), filter_kernel.astype(np.int8)).any():
+    #         if np.bitwise_and(sub_data.astype(np.int8), filter_kernel.astype(np.int8)).a_Y():
     #             data[row, col] = 90
     #         else:
     #             data[row, col] = 0

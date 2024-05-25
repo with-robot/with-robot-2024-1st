@@ -113,9 +113,11 @@ class GridmapPubNode(Node):
             # )
             # x = self.sub_odom.linear.x
             # y = self.sub_odom.linear.y
-            current_pos = (self.odometry.twist.linear.x+5.0, 5.0-self.odometry.twist.linear.y)
+            # current_pos = (self.odometry.twist.linear.x+5.0, 5.0-self.odometry.twist.linear.y)
+            # 좌표를 +축으로 이동. (-5 ~ 5 ) ==> (0, 10)
+            current_pos = (self.odometry.twist.linear.x + 5, 5-self.odometry.twist.linear.y)
             
-            theta = -self.odometry.twist.angular.z
+            theta = -self.odometry.twist.angular.z #차체가 180도 회전상태
 
             if self.gridmap is None:
                 self.gridmap = GridMap(
@@ -126,10 +128,8 @@ class GridmapPubNode(Node):
                 )
 
             # ranges는 65개
-            # self.get_logger().info(
-            #     f"ranges: {len(scan.ranges)}, max:{scan.range_max}, min:{scan.range_min}, ang_unit:{scan.angle_increment},theta:{theta}"
-            # )
-            robot_body_offset = 0.5
+            robot_body_offset = 0.1
+
             for i, r in enumerate(reversed(scan.ranges)):
                 # if r <= scan.range_max and r >= scan.range_min:
                 if 0.0 < r + robot_body_offset < 10.0:
@@ -138,12 +138,6 @@ class GridmapPubNode(Node):
                     # self.get_logger().info(f"distance r: {r}, yaw_ray:{yaw_ray}")
                     # 위치, 각도, 길이, threathold확율값
                     self.gridmap.add_ray(current_pos, yaw_ray, r, 0.7)
-                    # self.gridmap.add_point(
-                    #     x
-                    #     + r * math.cos(yaw + scan.angle_min + i * scan.angle_increment),
-                    #     y
-                    #     + r * math.sin(yaw + scan.angle_min + i * scan.angle_increment),
-                    # )
 
             # pose와 measurement를 저장한다.
             # self.save_pose_measurement(scan)
@@ -209,8 +203,6 @@ class GridmapPubNode(Node):
         occ_grid.info.origin.orientation.z = 0.0
         occ_grid.info.origin.orientation.w = 1.0
         # map data is the occupancy grid map
-        # self.get_logger().info(f"published:: reshaped_gridmap: {max(reshaped_gridmap)},{min(reshaped_gridmap)}")
-        # clipped_gridmap = np.clip(reshaped_gridmap, -128, 127)
         occ_grid.data = reshaped_gridmap.astype(dtype=np.int8).tolist()
 
         # Publishing the message

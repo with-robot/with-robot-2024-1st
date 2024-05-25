@@ -3,14 +3,14 @@ from typing import TypeVar, Sequence
 
 class Dir(Enum):
     X = "x"
-    NX = "-x"
+    _X = "-x"
     Y = "y"
-    NY = "-y"
+    _Y = "-y"
 
 class State(Enum):    
     WAITING = 0
     MOVING = 1
-    STOPPED = 2
+    ROTATE_STOP = 2
     ROTATING = 3
     DONE = 5
 

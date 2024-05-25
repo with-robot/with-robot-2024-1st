@@ -20,7 +20,7 @@ def generate_launch_description():
     )
     grid_map_node = Node(
         package=package_name,
-        executable="map_make",
+        executable="create_map",
         output="screen",
         parameters=[],
     )

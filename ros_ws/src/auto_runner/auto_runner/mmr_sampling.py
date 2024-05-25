@@ -8,7 +8,7 @@ def euclidean_distance(a, b):
 
 
 def find_farthest_coordinate(map: list, base: tuple) -> tuple:
-    x, y = base
+    
     # 맵에서 빈셀들을 선택
     arr = np.array(map)
     cordinates = []
@@ -16,8 +16,14 @@ def find_farthest_coordinate(map: list, base: tuple) -> tuple:
         for j in range(arr.shape[1]):
             if arr[i, j] == 0:
                 cordinates.append((i, j))
-
+    # while True:
+    #     _choice = random.choice(cordinates)
+    #     if _choice != base:
+    #         x, y = _choice
+    #         break
+    
     # 입력 좌표와 다른 좌표들 간의 거리를 계산
+    x, y = base
     distances = []
     for cord in cordinates:
         distance = math.sqrt((cord[0] - x) ** 2 + (cord[1] - y) ** 2)
