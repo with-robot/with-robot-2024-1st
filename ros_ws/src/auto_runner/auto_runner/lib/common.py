@@ -8,10 +8,10 @@ class Dir(Enum):
     _Y = "-y"
 
 class State(Enum):    
-    WAITING = 0
-    MOVING = 1
+    ROTATE_WAITING = 1
     ROTATE_STOP = 2
     ROTATING = 3
+    ROTATE_END = 4
     DONE = 5
 
 # Python에서는 프로토타입 기반의 객체 지향 프로그래밍을 직접적으로 지원하지 않지만, 

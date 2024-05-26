@@ -71,7 +71,7 @@ class AStartSearchNode(Node):
 
     def __init__(self) -> None:
         super().__init__("path_search_astar")
-        queue_size = 10
+        queue_size = 1
         # odom 위치정보 취득
         qos_profile = QoSProfile(depth=queue_size)
         self.create_subscription(
@@ -101,29 +101,29 @@ class AStartSearchNode(Node):
     ) -> None:  # msg로부터 위치정보를 추출
         if not grid_map:
             return
-        controller = self.robot_ctrl
+        # self.robot_ctrl = self.robot_ctrl
         # pfinder = self.path_find
         # 센서 데이터
-        controller.set_tfdata(msg)
-        controller.update_map(grid_map)
+        self.robot_ctrl.set_tfdata(msg)
+        self.robot_ctrl.update_map(grid_map)
 
         # 좌표설정
         # pfinder.set_cur_pos(controller.pos_data.cur)
         # 로봇진행 방향
-        robot_direction = controller.dir_data.cur
+        # robot_direction = controller.dir_data.cur
 
         # 도착처리_다음 목적지 설정
         # pfinder.check_arrival(robot_direction)
 
-        if controller.is_rotate_state() and not controller.check_rotation_complete():
+        if self.robot_ctrl.check_rotate_state():
             return
 
         if self.is_near():
             # 급 감속
             self._send_message(title="급감속", x=-self.FWD_TORQUE * 4 / 5)
 
-        # 직진 보정
-        controller.adjust_body()
+        # 직진, 방향 보정
+        self.robot_ctrl.adjust_body()
 
         # 목표 지점 및 다음 위치
         # next_pos = controller.check_and_dest()
@@ -133,13 +133,13 @@ class AStartSearchNode(Node):
 
         # 로봇 다음동작
         try:
-            x, theta = controller.next_action()
+            x, theta = self.robot_ctrl.next_action()
         except Exception as e:
             self.get_logger().info(f"controller stopped:{e}")
             # 맵생성까지 대기
             return
 
-        if controller.is_rotate_state():
+        if self.robot_ctrl.is_rotate_state():
                 self._send_message(title="회전전 감속", x=-self.FWD_TORQUE * 6 / 5)
 
         # 제어메시지 발행

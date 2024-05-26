@@ -1,17 +1,19 @@
 import math
 from auto_runner.lib.common import Dir, State, MessageHandler, TypeVar, StateData
 from auto_runner.lib.path_location import PathFinder
+
 LoggableNode = TypeVar("LoggableNode", bound=MessageHandler)
 
 
 class RobotController:
     """로봇의 방향조정과 목적위치까지 처리에 대한 책임을 갖는다."""
-    path_finder:PathFinder
-    
+
+    path_finder: PathFinder
+
     # 회전토크
-    rotate_torque = 0.6
+    rotate_torque = 1.0
     # 회전각도
-    rot_angle_ccw = 1.35 #0.85 * math.pi / 2.0 => 76도
+    rot_angle_ccw = 1.5  # 0.85 * math.pi / 2.0 => 76도
     # 직진토크
     fwd_torque = 0.5
     # x,y좌표 (x는 전후, y는 좌우)
@@ -20,7 +22,9 @@ class RobotController:
     pos_data: StateData
     state_data: StateData
 
-    def __init__(self, node: LoggableNode, path_finder:PathFinder, dir: Dir = Dir.X) -> None:
+    def __init__(
+        self, node: LoggableNode, path_finder: PathFinder, dir: Dir = Dir.X
+    ) -> None:
         self.node = node
         self.path_finder = path_finder
         self.dir_data = StateData(dir, dir)
@@ -28,13 +32,13 @@ class RobotController:
         self.pos_data = StateData((0, 0), (0, 0))
         self.state_data = StateData(State.ROTATE_STOP, State.ROTATE_STOP)
         self.amend_h_count = 0
-        self.__t_diff = 0
+        self.__t_diff = -1
 
     # tf데이터 수신
     def set_tfdata(self, twistStamped: object):
         new_pose = (twistStamped.twist.linear.x, twistStamped.twist.linear.y)
-        self.pos_data.cur =new_pose
-        self.angular_data.cur=twistStamped.twist.angular.z
+        self.pos_data.cur = new_pose
+        self.angular_data.cur = twistStamped.twist.angular.z
 
         # 좌표설정
         self.path_finder.set_cur_pos(self.pos_data.cur)
@@ -49,10 +53,11 @@ class RobotController:
         cur_pos = self.path_finder.cur_pos
         # 다음이동 경로탐색
         next_pos = self.path_finder.check_and_dest(self.dir_data.cur)
+
         if not next_pos:
             self.stop_car()
-            raise Exception('controller stopped')
-        
+            raise Exception("controller stopped")
+
         self.node.print_log(f"next_pose: {cur_pos} => {next_pos}")
 
         LEFT_TURN = (self.rotate_torque, self.rot_angle_ccw)
@@ -62,15 +67,15 @@ class RobotController:
         x0, y0 = cur_pos
         x1, y1 = next_pos
 
-        _next_dir=_cur_dir=self.dir_data.cur
-        
+        _next_dir = _cur_dir = self.dir_data.cur
+
         _torq_ang = MOVE_FWD  # 직진
         _next_dir = self.dir_data.cur
         if _cur_dir == Dir.X:
             if y1 > y0:
-                _torq_ang,_next_dir = LEFT_TURN, Dir.Y  # 좌회전
+                _torq_ang, _next_dir = LEFT_TURN, Dir.Y  # 좌회전
             elif y1 < y0:
-                _torq_ang,_next_dir = RIGHT_TURN, Dir._Y  # 우회전
+                _torq_ang, _next_dir = RIGHT_TURN, Dir._Y  # 우회전
 
         elif _cur_dir == Dir._X:
             if y1 > y0:
@@ -96,8 +101,8 @@ class RobotController:
         # 방향 및 목적위치
         self.dir_data.shift(_next_dir)
 
-        self.angular_data.old=self.angular_data.cur
-        self.pos_data.old=self.pos_data.cur
+        self.angular_data.old = self.angular_data.cur
+        self.pos_data.old = self.pos_data.cur
 
         self.node.print_log(
             f"{self.dir_data}\n{self.state_data}\n{self.pos_data}\n{self.angular_data}"
@@ -106,36 +111,46 @@ class RobotController:
 
     # 회전상태 여부
     def is_rotate_state(self):
-        return self.state_data.cur == State.ROTATING
-    
-    #막다른 골목위치 체크
+        # cond1:bool = math.fabs(self.angular_data.cur - self.angular_data.old) > 0.01
+        cond2:bool = self.state_data.cur == State.ROTATING
+        return cond2
+
+    # 막다른 골목위치 체크
     def check_obstacle(self):
         # 후진모드설정
         pass
 
     # 회전이 종료되면 True반환
-    def check_rotation_complete(self):
-        self.node.print_log(f"<<is_rotating>> dir_data: {self.dir_data}, angular_data: {self.angular_data}")
+    def check_rotate_state(self):
 
-        def __angle_diff():
-            _diff = self.angular_data.cur - self.angular_data.old
-            if _diff >  2*math.pi:
-                _diff -= 2 * math.pi
-            elif _diff < -2*math.pi:
-                _diff += 2 * math.pi
-            
-            self.node.print_log(f"angular_diff: {_diff}")
-            return math.fabs(_diff)
+        if not self.is_rotate_state():
+            return False
+
+        self.node.print_log(
+            f"<<is_rotating>> dir_data: {self.dir_data}, angular_data: {self.angular_data}"
+        )
+
+        __t_diff = (self.angular_data.cur - self.angular_data.old) % (2*math.pi)
+        if __t_diff > 2 * math.pi:
+            __t_diff -= 2 * math.pi
+        elif __t_diff < -2 * math.pi:
+            __t_diff += 2 * math.pi
+
+        self.node.print_log(f"angular_diff: {__t_diff}")
+        if __t_diff < math.pi / 2 * 0.3:
+            return True
         
-        __t_diff = __angle_diff()
-        if __t_diff < math.pi / 2 * 0.7:
+        elif __t_diff < math.pi / 2 * 0.8:
+            self.state_data.cur = State.ROTATING
             # self.node._send_message(title="회전 중 전진", x=0.2)
             if self.__t_diff != __t_diff:
                 self.__t_diff = __t_diff
-                return False
-        self.node._send_message(title='정지', x=-0.2)
-        self.state_data.shift(State.ROTATE_STOP)
-        return True
+                return True
+            
+        else:
+            self.node._send_message(title="회전 브레이크", x=0.0)
+            self.state_data.shift(State.ROTATE_STOP)
+            return False
 
     # def is_same_block(self, comparator: callable):
     #     self.node.print_log(f"<<is_same_block>> pos_data: {self.pos_data}")
@@ -147,16 +162,24 @@ class RobotController:
         # 간격을 두어 보정한다.
         # 잦은 조정에의한 좌우 흔들림 방지.
         if self.amend_h_count % 3 == 0 and abs(amend_theta) > 3 / 180 * math.pi:
-            self.node._send_message(title="수평보정", x=0.2, theta=amend_theta * 3 / 5)
             self.node.print_log(
                 f"[{self.dir_data.cur} 위치보정] 보정 각:{amend_theta} / 기준:{3 / 180 * math.pi}"
             )
+            self.node._send_message(title="수평보정", x=0.2, theta=amend_theta * 3 / 5)
             self.amend_h_count = 0
         else:
             self.amend_h_count += 1
 
     # 각도를 입력받아, 진행방향과 벗어난 각도를 반환한다.
     def _get_deviation_radian(self) -> tuple[float, str]:
+        def __make_response(v: float):
+            v_abs = math.fabs(v)
+            return (
+                v
+                if v_abs < math.pi / 2
+                else math.copysign(1, v) * (2 * math.pi - v_abs)
+            )
+
         # 유니티에서 로봇의 기본회전상태가 180 CCW상태, 즉 음의 값.
         # 회전방향 수치를 양수로 정리한다.
         _cur_angle = self.angular_data.cur % (math.pi * 2)
@@ -164,23 +187,23 @@ class RobotController:
 
         _cur_dir = self.dir_data.cur
 
-        if _cur_dir == Dir.X: 
+        if _cur_dir == Dir.X:
             amend_theta = math.pi - _cur_angle
 
         elif _cur_dir == Dir._X:
             amend_theta = -_cur_angle
 
-        elif _cur_dir == Dir.Y:
-            # -180 ~ -270
-            #차이량에 대해 음수면 바퀴가 우측방향으로 돌게된다. (우회전으로 보정)
-            amend_theta = math.pi*3/2 - _cur_angle
-
         elif _cur_dir == Dir._Y:  #'-y'
-            amend_theta = math.pi/2 - _cur_angle
+            # -180 ~ -270
+            # 차이량에 대해 음수면 바퀴가 우측방향으로 돌게된다. (우회전으로 보정)
+            amend_theta = math.pi * 3 / 2 - _cur_angle
+
+        elif _cur_dir == Dir.Y:
+            amend_theta = math.pi / 2 - _cur_angle
         else:
             amend_theta = 0.0
 
-        return amend_theta
+        return __make_response(amend_theta)
 
     def do_stabilize(self):
         pass

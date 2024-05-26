@@ -57,9 +57,12 @@ class PathFinder:
                 
             if self._check_pose_error(cur_dir):
                 _original_dest = self.dest_pos
+            # else:
+            #     self.paths = self.paths[1:]
+            #     return self.paths[1]
     
         paths = []
-        exclude = [self.paths] if len(self.paths) > 0 else []
+        exclude = self.paths if len(self.paths) > 0 else [cur_dir]
         while len(paths) == 0:
             if not _original_dest and _original_dest not in exclude:
                 dest_pos = _original_dest
