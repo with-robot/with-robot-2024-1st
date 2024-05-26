@@ -30,7 +30,7 @@ class State(Enum):
     # '''인터페이스정의 클래스'''
 
 class MessageHandler:
-    def _logging(self, message):'''로깅을 한다'''
+    def print_log(self, message):'''로깅을 한다'''
     def _send_message(self, **kwargs):'''로봇에 메시지를 전달한다'''
 
 

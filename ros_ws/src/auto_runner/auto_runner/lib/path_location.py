@@ -41,33 +41,44 @@ class PathFinder:
             return
 
         self.dest_pos = None
-        next_pos = self.check_and_dest(self.cur_pos, cur_dir)
-        self.node._logging(f"<<arrived>> pos:{self.cur_pos}, next:{next_pos}")
+        next_pos = self.check_and_dest(cur_dir)
+        self.node.print_log(f"<<arrived>> pos:{self.cur_pos}, next:{next_pos}")
 
     # 다음위치 계산
     def check_and_dest(self, cur_dir) -> tuple[int, int]:
-        self.node._logging(f"<<check_and_dest>> pos:{self.cur_pos}, dir:{cur_dir}")
+        self.node.print_log(f"<<check_and_dest>> pos:{self.cur_pos}, dir:{cur_dir}")
+        self.node.print_log(f"<<check_and_dest>> dest_pos:{self.dest_pos}, paths0:{self.paths[0] if self.paths else ''}")
         
-        if self.dest_pos and len(self.paths) > 1 and self.paths[1]==self.cur_pos:
-            # 정상 이동 시, 경로를 재검색하지 않는다.
-            # 완료된 경로 제거
-            self.paths = self.paths[1:]
-            return self.paths[1]
+        _original_dest = None
+        if self.dest_pos:
+            if len(self.paths) > 1 and self.paths[0]==self.cur_pos:            
+                # 정상 이동 시, 경로를 재검색하지 않는다.
+                return self.paths[1]
+                
+            if self._check_pose_error(cur_dir):
+                _original_dest = self.dest_pos
     
         paths = []
-        dest_pos = (0,0)
-        _fail_dest_pos = None
+        exclude = [self.paths] if len(self.paths) > 0 else []
         while len(paths) == 0:
-            if _fail_dest_pos ==dest_pos:
+            if not _original_dest and _original_dest not in exclude:
+                dest_pos = _original_dest
+            else:
+                dest_pos = mmr_sampling.find_farthest_coordinate(
+                    self.grid_map, self.cur_pos, exclude
+                )
+                self.node.print_log(f'mmr_sampling performed: dest_pos:{dest_pos}')
+                if not dest_pos:
+                    self.node.print_log(f'mmr_sampling failed: map:{self.grid_map}')
+
+            if not dest_pos:
                 return []
-            dest_pos = mmr_sampling.find_farthest_coordinate(
-                self.grid_map, self.cur_pos
-            )
+                
             paths = self._astar_method(self.cur_pos, dest_pos, cur_dir)
             if len(paths) == 0:
-                _fail_dest_pos = dest_pos
+                exclude.append(dest_pos)
 
-            self.node._logging(f"목표위치: {dest_pos}, A* PATH: {paths}")
+            self.node.print_log(f"목표위치: {dest_pos}, A* PATH: {paths}")
         
         self.dest_pos = dest_pos
         self.paths = paths
@@ -97,7 +108,7 @@ class PathFinder:
         :param goal: 목표 지점 (x, y)
         :return: 최단 경로
         """
-        self.node._logging(
+        self.node.print_log(
             f"find_path: {start}, goal: {goal}, map:{len(self.grid_map)}"
         )
         self.is_found = False
@@ -139,8 +150,8 @@ class PathFinder:
                     # 최초 다음위치에서 self.dir의 반대방향을 제외시킨다.
                     and not self._check_if_backpath(cur_d, next_d) 
                 ):
-                    # if self._check_if_backpath(cur_d, next_d):
-                    #     continue
+                    if self._check_if_backpath(cur_d, next_d):
+                        continue
 
                     frontier.append(
                         ((next_x, next_y, next_d), path + [(next_x, next_y)])
@@ -156,11 +167,11 @@ class PathFinder:
         return []
 
     # 방향 제한조건
-    def _check_if_backpath(self, cur_dir: str, next_dir: str) -> bool:
+    def _check_if_backpath(self, cur_dir: Dir, next_dir: Dir) -> bool:
         # -xx or x-x 패턴
         pattern = re.compile(r"^-(.)\1$|^(.)-\2$")
         # 후진 경로 배제
-        return pattern.match(f"{cur_dir}{next_dir}") is not None
+        return pattern.match(f"{cur_dir.value}{next_dir.value}") is not None
 
     # 목표지점까지 추정거리
     def _heuristic_distance(self, start_pos, end_pos) -> int:
@@ -172,8 +183,8 @@ class PathFinder:
         return abs(x1 - x2) + abs(y1 - y2)
 
     # 경로이탈 여부
-    def _check_pose_error(self, new_cor):
-        if a_Y(x for x in self.grid_map if x == new_cor):
+    def _check_pose_error(self, cur_pos):
+        if any(x for x in self.paths if x == cur_pos):
             return False
 
         return True

@@ -7,15 +7,18 @@ def euclidean_distance(a, b):
     return np.linalg.norm(a - b)
 
 
-def find_farthest_coordinate(map: list, base: tuple) -> tuple:
+def find_farthest_coordinate(map: list, base: tuple, exclude:list[tuple]) -> tuple:
     
     # 맵에서 빈셀들을 선택
     arr = np.array(map)
     cordinates = []
     for i in range(arr.shape[0]):
         for j in range(arr.shape[1]):
+            if (i, j) in exclude:
+                continue
             if arr[i, j] == 0:
                 cordinates.append((i, j))
+    
     # while True:
     #     _choice = random.choice(cordinates)
     #     if _choice != base:
@@ -29,10 +32,13 @@ def find_farthest_coordinate(map: list, base: tuple) -> tuple:
         distance = math.sqrt((cord[0] - x) ** 2 + (cord[1] - y) ** 2)
         distances.append((cord, distance))
 
+    if len(distances) == 0:
+        return []
+    
     # 거리가 가장 먼 좌표 찾기
     farthest_coordinate = max(distances, key=lambda x: x[1])
 
-    return farthest_coordinate[0] if farthest_coordinate else base
+    return farthest_coordinate[0]
 
 
 def mmr_sampling(array, initial_sample, num_samples):
