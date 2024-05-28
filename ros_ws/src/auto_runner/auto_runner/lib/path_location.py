@@ -5,6 +5,19 @@ import re, math
 
 LoggableNode = TypeVar("LoggableNode", bound=MessageHandler)
 
+# SLAM 맵 10X10
+SLAM_MAP = [
+    [0, 0, 0, 1, 0, 1, 0, 0, 0, 0],
+    [0, 0, 0, 1, 0, 1, 0, 0, 0, 0],
+    [0, 0, 0, 1, 0, 1, 0, 0, 1, 0],
+    [0, 0, 0, 0, 0, 1, 0, 0, 1, 0],
+    [0, 1, 1, 0, 0, 1, 0, 0, 1, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 1, 1, 1, 1, 1, 1, 0],
+    [0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
+    [0, 0, 1, 0, 0, 1, 0, 0, 0, 0],
+    [0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+]
 
 class PathFinder:
     """맵과 위치정보에 대한 책임을 갖는다"""
@@ -15,7 +28,7 @@ class PathFinder:
         self,
         node: LoggableNode,
         algorithm: str = "a-star",
-        dest_pos: tuple = (-1, -1),
+        dest_pos: tuple = (2, 9),
     ) -> None:
         self.node = node
         self.is_found = False
@@ -32,7 +45,7 @@ class PathFinder:
             return []
 
     def update_map(self, map: list[Sequence[int]]) -> None:
-        self.grid_map = map
+        self.grid_map = SLAM_MAP
 
     # 도착위치이면 새로운 도착위치를 반환한다.
     def check_arrival(self, cur_dir):
@@ -55,20 +68,20 @@ class PathFinder:
                 # 정상 이동 시, 경로를 재검색하지 않는다.
                 return self.paths[1]
                 
-            if self._check_pose_error(cur_dir):
+            if self._check_pose_error(self.cur_pos):
                 _original_dest = self.dest_pos
-            # else:
-            #     self.paths = self.paths[1:]
-            #     return self.paths[1]
+            else:
+                self.paths = self.paths[1:]
+                return self.paths[1]
     
         paths = []
-        exclude = self.paths if len(self.paths) > 0 else [cur_dir]
+        exclude = self.paths if len(self.paths) > 0 else [self.cur_pos]
         while len(paths) == 0:
             if not _original_dest and _original_dest not in exclude:
                 dest_pos = _original_dest
             else:
                 dest_pos = mmr_sampling.find_farthest_coordinate(
-                    self.grid_map, self.cur_pos, exclude
+                    self.grid_map, self.cur_pos, exclude, self.node.print_log
                 )
                 self.node.print_log(f'mmr_sampling performed: dest_pos:{dest_pos}')
                 if not dest_pos:
@@ -90,6 +103,10 @@ class PathFinder:
 
     def set_cur_pos(self, pose: tuple[float, float]):
         self.cur_pos = self._transfer2_xy(pose)
+
+    # 다음위치에서 전 경로를 제거, 이 다음 경로를 반환한다.
+    def get_next_pos(self):
+        return self.paths[1]
 
     # 위치값을 맵좌표로 변환    
     def _transfer2_xy(self, pose: tuple[float, float]) -> tuple[int, int]:

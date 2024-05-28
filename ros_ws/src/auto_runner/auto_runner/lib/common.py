@@ -8,7 +8,7 @@ class Dir(Enum):
     _Y = "-y"
 
 class State(Enum):    
-    ROTATE_WAITING = 1
+    ROTATE_START = 1
     ROTATE_STOP = 2
     ROTATING = 3
     ROTATE_END = 4

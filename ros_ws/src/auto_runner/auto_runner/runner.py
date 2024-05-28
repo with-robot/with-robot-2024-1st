@@ -107,14 +107,6 @@ class AStartSearchNode(Node):
         self.robot_ctrl.set_tfdata(msg)
         self.robot_ctrl.update_map(grid_map)
 
-        # 좌표설정
-        # pfinder.set_cur_pos(controller.pos_data.cur)
-        # 로봇진행 방향
-        # robot_direction = controller.dir_data.cur
-
-        # 도착처리_다음 목적지 설정
-        # pfinder.check_arrival(robot_direction)
-
         if self.robot_ctrl.check_rotate_state():
             return
 
@@ -125,22 +117,16 @@ class AStartSearchNode(Node):
         # 직진, 방향 보정
         self.robot_ctrl.adjust_body()
 
-        # 목표 지점 및 다음 위치
-        # next_pos = controller.check_and_dest()
-        # if not next_pos:
-        #     controller.stop_car()
-        #     raise Exception('controller stopped')
-
         # 로봇 다음동작
         try:
             x, theta = self.robot_ctrl.next_action()
         except Exception as e:
             self.get_logger().info(f"controller stopped:{e}")
-            # 맵생성까지 대기
+            # 맵 생성까지 대기
             return
 
         if self.robot_ctrl.is_rotate_state():
-                self._send_message(title="회전전 감속", x=-self.FWD_TORQUE * 6 / 5)
+                self._send_message(title="회전전 감속", x=-self.FWD_TORQUE * 4 / 5)
 
         # 제어메시지 발행
         self._send_message(title="주행지시", x=x, theta=theta)

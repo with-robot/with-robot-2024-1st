@@ -7,7 +7,7 @@ def euclidean_distance(a, b):
     return np.linalg.norm(a - b)
 
 
-def find_farthest_coordinate(map: list, base: tuple, exclude:list[tuple]) -> tuple:
+def find_farthest_coordinate(map: list, base: tuple, exclude:list[tuple], log) -> tuple:
     
     # 맵에서 빈셀들을 선택
     arr = np.array(map)
@@ -19,6 +19,7 @@ def find_farthest_coordinate(map: list, base: tuple, exclude:list[tuple]) -> tup
             if arr[i, j] == 0:
                 cordinates.append((i, j))
     
+    log(f"cordinates:{cordinates}, exclude:{exclude}")
     # while True:
     #     _choice = random.choice(cordinates)
     #     if _choice != base:
