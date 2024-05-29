@@ -65,13 +65,11 @@ class LidarScanNode(Node):
 
 class AStartSearchNode(Node):
 
-    ROT_TORQUE = 0.3  # 회전토크
-    ROT_THETA = 1.10  # 회전각도크기
-    FWD_TORQUE = 0.1  # 직진방향 토크
-
     def __init__(self) -> None:
         super().__init__("path_search_astar")
         queue_size = 1
+        self.twist_msg = Twist()
+
         # odom 위치정보 취득
         qos_profile = QoSProfile(depth=queue_size)
         self.create_subscription(
@@ -89,7 +87,6 @@ class AStartSearchNode(Node):
         )
 
         self.get_logger().info(f"AStartpath_searchNode started...")
-        self.twist_msg = Twist()
         self.setup()
 
         _path_finder = path_location.PathFinder(self, algorithm="a-start")
@@ -101,18 +98,18 @@ class AStartSearchNode(Node):
     ) -> None:  # msg로부터 위치정보를 추출
         if not grid_map:
             return
-        # self.robot_ctrl = self.robot_ctrl
-        # pfinder = self.path_find
+
         # 센서 데이터
-        self.robot_ctrl.set_tfdata(msg)
         self.robot_ctrl.update_map(grid_map)
+        self.robot_ctrl.set_tfdata(msg)
 
         if self.robot_ctrl.check_rotate_state():
             return
 
         if self.is_near():
             # 급 감속
-            self._send_message(title="급감속", x=-self.FWD_TORQUE * 4 / 5)
+            self._send_message(title="근접 후진", x=-1.0)            
+            return
 
         # 직진, 방향 보정
         self.robot_ctrl.adjust_body()
@@ -126,7 +123,7 @@ class AStartSearchNode(Node):
             return
 
         if self.robot_ctrl.is_rotate_state():
-                self._send_message(title="회전전 감속", x=-self.FWD_TORQUE * 4 / 5)
+                self._send_message(title="회전전 감속", x=-0.4)
 
         # 제어메시지 발행
         self._send_message(title="주행지시", x=x, theta=theta)
@@ -141,33 +138,35 @@ class AStartSearchNode(Node):
                 self.nanoseconds = time.nanoseconds
 
                 ### Driving ###
-                nearest_distance = 0.5  # 50cm
-                win = 8  # # of elements in forward, left, right sensor groups
-                length = len(laser_scan.ranges)
-                center = length // 2
-                distances = []
-                for i in range(length // 8):
-                    if i * win < center and (i + 1) * win > center:
-                        shift1, shift2 = 0, 1
-                    elif (i + 1) * win < center:
-                        shift1, shift2 = 0, 0
-                    else:
-                        shift1, shift2 = 1, 1
-                    distances.append(
-                        min(
-                            laser_scan.ranges[win * i + shift1 : win * (i + 1) + shift2]
-                        )
+                nearest_distance = 0.6  # 50cm
+                # win = 8  # # of elements in forward, left, right sensor groups
+                # length = len(laser_scan.ranges)
+                # center = length // 2
+                # distances = []
+                # for i in range(length // 8):
+                #     if i * win < center and (i + 1) * win > center:
+                #         shift1, shift2 = 0, 1
+                #     elif (i + 1) * win < center:
+                #         shift1, shift2 = 0, 0
+                #     else:
+                #         shift1, shift2 = 1, 1
+                #     distances.append(
+                #         min(
+                #             laser_scan.ranges[win * i + shift1 : win * (i + 1) + shift2]
+                #         )
+                #     )
+                _distance = min(
+                        laser_scan.ranges[32-5 : 33+5]
                     )
                 self.get_logger().info(
-                    f"distances:{distances[4:6]}/기준:{nearest_distance}"
+                    f"distances:{_distance}/기준:{nearest_distance}"
                 )
-                return min(distances[4:6]) <= nearest_distance
+                return _distance <= nearest_distance
 
         return False
 
     def setup(self) -> None:
         self.nanoseconds = 0
-        # self.dest_pos = (2, 9)
         self.get_logger().info("초기화 처리 완료")
 
     def send_command(self, request, response) -> None:

@@ -45,7 +45,7 @@ class PathFinder:
             return []
 
     def update_map(self, map: list[Sequence[int]]) -> None:
-        self.grid_map = SLAM_MAP
+        self.grid_map = map
 
     # 도착위치이면 새로운 도착위치를 반환한다.
     def check_arrival(self, cur_dir):
@@ -77,7 +77,7 @@ class PathFinder:
         paths = []
         exclude = self.paths if len(self.paths) > 0 else [self.cur_pos]
         while len(paths) == 0:
-            if not _original_dest and _original_dest not in exclude:
+            if _original_dest and _original_dest not in exclude:
                 dest_pos = _original_dest
             else:
                 dest_pos = mmr_sampling.find_farthest_coordinate(
@@ -105,7 +105,10 @@ class PathFinder:
         self.cur_pos = self._transfer2_xy(pose)
 
     # 다음위치에서 전 경로를 제거, 이 다음 경로를 반환한다.
-    def get_next_pos(self):
+    def get_next_pos(self, cur_pos:tuple):
+        x = self.paths.index(cur_pos)
+        if x > 0:
+            self.paths = self.paths[x:]
         return self.paths[1]
 
     # 위치값을 맵좌표로 변환    
