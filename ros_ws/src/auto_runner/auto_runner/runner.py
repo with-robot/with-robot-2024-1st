@@ -103,12 +103,12 @@ class AStartSearchNode(Node):
         self.robot_ctrl.update_map(grid_map)
         self.robot_ctrl.set_tfdata(msg)
 
-        if self.robot_ctrl.check_rotate_state():
-            return
-
         if self.is_near():
             # 급 감속
-            self._send_message(title="근접 후진", x=-1.0)            
+            self._send_message(title="근접 후진", x=-1.0, theta=0.3)            
+            return
+
+        if self.robot_ctrl.check_rotate_state():
             return
 
         # 직진, 방향 보정
@@ -156,7 +156,7 @@ class AStartSearchNode(Node):
                 #         )
                 #     )
                 _distance = min(
-                        laser_scan.ranges[32-5 : 33+5]
+                        laser_scan.ranges[32-10:33+10]
                     )
                 self.get_logger().info(
                     f"distances:{_distance}/기준:{nearest_distance}"

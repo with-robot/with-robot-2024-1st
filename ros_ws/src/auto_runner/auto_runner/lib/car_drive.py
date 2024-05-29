@@ -143,10 +143,11 @@ class RobotController:
 
         self.node.print_log(f"angular_diff: {__t_diff}")
 
-        if self.state_data.cur == State.ROTATE_START and self.__t_diff == __t_diff:
+        if self.state_data.cur == State.ROTATE_START and self.__t_diff*.95 <= __t_diff<=self.__t_diff*1.05:
             self.node._send_message(
                 title="미회전 재전", x=self.torq_ang[0] / 2, theta=self.torq_ang[1]
             )
+            self.__t_diff = __t_diff
             return True
 
         elif __t_diff > 0.1 and self.state_data.cur != State.ROTATE_START:
@@ -209,12 +210,12 @@ class RobotController:
         a = self.angular_data.cur % (2 * math.pi)
         a = a if a > 0 else 2 * math.pi + a
         if 0< a < A * 1/3 or A*11/3 < a < 4*A:
-            return Dir._Y
-        elif A *2/3 <a < A *4/3:
             return Dir._X
-        elif A *8/3 < a < A*10/3:
+        elif A *2/3 <a < A *4/3:
+            return Dir._Y
+        elif A *5/3 < a < A*7/3:
             return Dir.X
-        else:
+        elif A *8/3 < a < A*10/3:
             return Dir.Y
     
     # 수평상태
