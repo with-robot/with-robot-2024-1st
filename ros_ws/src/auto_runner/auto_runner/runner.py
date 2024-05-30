@@ -1,5 +1,3 @@
-import math
-import re
 import numpy as np
 import rclpy
 from rclpy.node import Node
@@ -10,10 +8,8 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from geometry_msgs.msg import TwistStamped, Twist, Vector3
 from yolov8_msgs.srv import CmdMsg
 from sensor_msgs.msg import LaserScan
-from collections import deque
 from nav_msgs.msg import OccupancyGrid
 from auto_runner.map_transform import occ_gridmap
-from auto_runner.mmr_sampling import find_farthest_coordinate
 from auto_runner.lib import car_drive, common, path_location
 
 laser_scan: LaserScan = None
@@ -77,7 +73,7 @@ class AStartSearchNode(Node):
         self.create_subscription(
             TwistStamped,
             "/unity_tf",
-            callback=self.unity_tf_sub_callback,
+            callback=self.unity_tf_callback,
             qos_profile=qos_profile,
         )
         self.pub_jetauto_car = self.create_publisher(
@@ -88,15 +84,15 @@ class AStartSearchNode(Node):
             CmdMsg, "jetauto_car/cmd_msg", self.send_command
         )
 
-        self.get_logger().info(f"AStartpath_searchNode started...")
         self.twist_msg = Twist()
         self.setup()
 
         _path_finder = path_location.PathFinder(self, algorithm="a-start")
         self.robot_ctrl = car_drive.RobotController(self, _path_finder, common.Dir.X)
 
+        self.get_logger().info(f"AStart_Path_Search_Mode has started...")
 
-    def unity_tf_sub_callback(
+    def unity_tf_callback(
         self, msg: TwistStamped
     ) -> None:  # msg로부터 위치정보를 추출
         if not grid_map:
