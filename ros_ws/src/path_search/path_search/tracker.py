@@ -130,7 +130,7 @@ class AStartSearchNode(Node):
 
         # 회전상태 체크
         if self.rotate_state:
-            if self.is_rotating(input_msg.twist.angular):
+            if self.on_rotating(input_msg.twist.angular):
                 return
 
             self.amend_h_count = 0
@@ -217,7 +217,7 @@ class AStartSearchNode(Node):
         self.is_arrived = True
 
     # 회전여부를 파악한다.
-    def is_rotating(self, angular: object) -> bool:
+    def on_rotating(self, angular: object) -> bool:
 
         TARGET_ANGLE = math.pi / 2
 
@@ -236,7 +236,7 @@ class AStartSearchNode(Node):
 
         if TARGET_ANGLE * 0.8 < rotation_angle:
             break_torque = self.get_break_torque(rotation_angle, TARGET_ANGLE)
-            self.send_breakmsg("is_rotating", break_torque)
+            self.send_breakmsg("on_rotating", break_torque)
 
             self.get_logger().info(
                 f"angular_diff: {rotation_angle} / {rotation_angle < TARGET_ANGLE * 0.92}"

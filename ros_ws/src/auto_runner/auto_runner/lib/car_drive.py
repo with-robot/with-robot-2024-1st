@@ -60,7 +60,7 @@ class RobotController:
 
         if not next_pos:
             self.stop_car()
-            #TODO: 차량 초기화 처리
+            # TODO: 차량 초기화 처리
             raise Exception("controller stopped")
 
         self.node.print_log(f"next_pose: {cur_pos} => {next_pos}")
@@ -90,9 +90,9 @@ class RobotController:
 
         elif _cur_dir == Dir.Y:
             if x1 > x0:
-                _torq_ang, _next_dir = RIGHT_TURN, Dir.X  # 우회전
-            elif x1 < x0:
                 _torq_ang, _next_dir = LEFT_TURN, Dir._X  # 좌회전
+            elif x1 < x0:
+                _torq_ang, _next_dir = RIGHT_TURN, Dir.X  # 우회전
 
         elif _cur_dir == Dir._Y:
             if x1 > x0:
@@ -101,7 +101,7 @@ class RobotController:
                 _torq_ang, _next_dir = LEFT_TURN, Dir._X  # 우회전
 
         if _torq_ang[1] != 0.0:
-            self.state_data.shift(State.ROTATING)
+            self.state_data.shift(State.ROTATE_READY)
 
         # 방향 및 목적위치
         self.dir_data.shift(_next_dir)
@@ -118,7 +118,7 @@ class RobotController:
     # 회전상태 여부
     def is_rotate_state(self):
         # cond1:bool = math.fabs(self.angular_data.cur - self.angular_data.old) > 0.01
-        cond2: bool = self.state_data.cur in [State.ROTATE_START, State.ROTATING]
+        cond2: bool = self.state_data.cur in [State.ROTATE_START, State.ROTATE_READY]
         return cond2
 
     # 막다른 골목위치 체크
@@ -128,12 +128,15 @@ class RobotController:
 
     # 회전이 종료되면 True반환
     def check_rotate_state(self):
-
+        
+        self.node.print_log(
+            f"<<check_rotate_state>> state_data: {self.state_data}"
+        )
         if not self.is_rotate_state():
             return False
 
         self.node.print_log(
-            f"<<is_rotating>> dir_data: {self.dir_data}, angular_data: {self.angular_data}"
+            f"<<on_rotating>> dir_data: {self.dir_data}, angular_data: {self.angular_data}"
         )
 
         def __angle_diff(cur, old):
@@ -144,7 +147,11 @@ class RobotController:
 
         self.node.print_log(f"angular_diff: {__t_diff}")
 
-        if self.state_data.cur == State.ROTATE_START and self.__t_diff*.95 <= __t_diff<=self.__t_diff*1.05:
+        if (
+            self.state_data.cur == State.ROTATE_START
+            and math.fabs((__t_diff - self.__t_diff) / __t_diff * 100) <= 2
+        ):
+            # 회전시작 후, 변동이 거의 없음 (2% 이내)
             self.node._send_message(
                 title="미회전 재전", x=self.torq_ang[0] / 2, theta=self.torq_ang[1]
             )
@@ -207,25 +214,29 @@ class RobotController:
         # return -_torque if _torque > min_torque else -min_torque
         return -1 * max(_torque, min_torque)
 
-    def calc_dir(self):
-        A = math.pi / 2
-        a = self.angular_data.cur % (2 * math.pi)
-        a = a if a > 0 else 2 * math.pi + a
-        if 0< a < A * 1/3 or A*11/3 < a < 4*A:
-            return Dir._X
-        elif A *2/3 <a < A *4/3:
-            return Dir._Y
-        elif A *5/3 < a < A*7/3:
+    def _calc_dir(self):
+        right_angle = math.pi / 2
+        cur_angle = self.angular_data.cur % (2 * math.pi)
+        cur_angle += 2 * math.pi if cur_angle < 0 else 0
+
+        if (
+            0 <= cur_angle <= right_angle *1/2
+            or right_angle*7/2 <= cur_angle<=4*right_angle
+        ):
             return Dir.X
-        elif A *8/3 < a < A*10/3:
+        elif right_angle*1/2 <= cur_angle <= right_angle*3/2:
             return Dir.Y
-    
+        elif right_angle*3/2 <= cur_angle < right_angle*5/2:
+            return Dir._X
+        elif right_angle*5/2 <= cur_angle < right_angle*7/2:
+            return Dir._Y
+
     # 수평상태
     def adjust_body(self):
         amend_theta = self._get_deviation_radian()
         # 각도가 매우 틀어진 경우, 몸체의 방향을 변경한다.
-        if math.fabs(amend_theta) > math.pi * 2/3:
-            dir_ = self.calc_dir()
+        if math.fabs(amend_theta) % (math.pi/2) > 0.7:
+            dir_ = self._calc_dir()
             self.dir_data.shift(dir_)
 
             self.node.print_log(
@@ -262,18 +273,17 @@ class RobotController:
         _cur_dir = self.dir_data.cur
 
         if _cur_dir == Dir.X:
+            amend_theta = - _cur_angle
+        elif _cur_dir == Dir._X:
             amend_theta = math.pi - _cur_angle
 
-        elif _cur_dir == Dir._X:
-            amend_theta = -_cur_angle
-
-        elif _cur_dir == Dir._Y:  #'-y'
+        elif _cur_dir == Dir.Y:
             # -180 ~ -270
             # 차이량에 대해 음수면 바퀴가 우측방향으로 돌게된다. (우회전으로 보정)
             amend_theta = math.pi / 2 - _cur_angle
-
-        elif _cur_dir == Dir.Y:
+        elif _cur_dir == Dir._Y:
             amend_theta = math.pi * 3 / 2 - _cur_angle
+
         else:
             amend_theta = 0.0
 

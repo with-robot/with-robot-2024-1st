@@ -115,13 +115,13 @@ class GridmapPubNode(Node):
             # y = self.sub_odom.linear.y
             # current_pos = (self.odometry.twist.linear.x+5.0, 5.0-self.odometry.twist.linear.y)
             # 좌표를 +축으로 이동. (-5 ~ 5 ) ==> (0, 10)
-            current_pos = (self.odometry.twist.linear.x + 5, 5-self.odometry.twist.linear.y)
+            current_pos = (self.odometry.twist.linear.x, self.odometry.twist.linear.y)
             
-            theta = -self.odometry.twist.angular.z #차체가 180도 회전상태
+            theta = self.odometry.twist.angular.z + math.pi/2
 
             if self.gridmap is None:
                 self.gridmap = GridMap(
-                    center=current_pos,
+                    center=(0,0),
                     logger=self.get_logger(),
                     cell_size=0.1,
                     map_width=10,

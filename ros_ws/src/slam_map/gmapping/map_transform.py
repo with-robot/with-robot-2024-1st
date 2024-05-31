@@ -155,8 +155,8 @@ def main():
     data = np.loadtxt(f"{base_dir}/resource/occ_map.txt")
 
     data = pre_process(data)
-    data = create_blockmap(data, map_size=(10,10), _grid_size=10)
-    data = rotate_map_cw(data)
+    # data = create_blockmap(data, map_size=(10,10), _grid_size=10)
+    # data = rotate_map_cw(data)
     print(data)
     plot_map(data, map_size=10)
 

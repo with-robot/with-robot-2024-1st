@@ -8,11 +8,9 @@ class Dir(Enum):
     _Y = "-y"
 
 class State(Enum):    
-    ROTATE_START = 1
-    ROTATE_STOP = 2
-    ROTATING = 3
-    ROTATE_END = 4
-    DONE = 5
+    ROTATE_READY = 1
+    ROTATE_START = 2
+    ROTATE_STOP = 3   
 
 # Python에서는 프로토타입 기반의 객체 지향 프로그래밍을 직접적으로 지원하지 않지만, 
 # __getattr__ 메서드와 메타클래스를 활용하면 프로토타입 기반의 인터페이스를 구현할 수 있습니다. 다음과 같이 작성할 수 있습니다:

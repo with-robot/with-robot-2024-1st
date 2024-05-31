@@ -4,21 +4,6 @@ from auto_runner import mmr_sampling
 import re, math
 
 LoggableNode = TypeVar("LoggableNode", bound=MessageHandler)
-
-# SLAM 맵 10X10
-SLAM_MAP = [
-    [0, 0, 0, 1, 0, 1, 0, 0, 0, 0],
-    [0, 0, 0, 1, 0, 1, 0, 0, 0, 0],
-    [0, 0, 0, 1, 0, 1, 0, 0, 1, 0],
-    [0, 0, 0, 0, 0, 1, 0, 0, 1, 0],
-    [0, 1, 1, 0, 0, 1, 0, 0, 1, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 1, 1, 1, 1, 1, 1, 0],
-    [0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
-    [0, 0, 1, 0, 0, 1, 0, 0, 0, 0],
-    [0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
-]
-
 class PathFinder:
     """맵과 위치정보에 대한 책임을 갖는다"""
 
@@ -28,7 +13,7 @@ class PathFinder:
         self,
         node: LoggableNode,
         algorithm: str = "a-star",
-        dest_pos: tuple = (2, 9),
+        dest_pos: tuple = (0, 0),
     ) -> None:
         self.node = node
         self.is_found = False
@@ -114,10 +99,11 @@ class PathFinder:
     # 위치값을 맵좌표로 변환    
     def _transfer2_xy(self, pose: tuple[float, float]) -> tuple[int, int]:
         # PC 맵 좌표를 SLAM 맵 좌표로 변환
-        _x = math.floor(5.0 - pose[0])  # x
-        _y = math.floor(5.0 - pose[1])  # y
+        _x = math.floor(5.0 + pose[0])  # x
+        _y = math.floor(5.0 + pose[1])  # y
 
         result = (_x if _x > 0 else 0, _y if _y > 0 else 0)
+        self.node.print_log(f"<<_transfer2_xy>> {pose} => {result}")
         return result
 
     # a* method
@@ -132,7 +118,7 @@ class PathFinder:
         :return: 최단 경로
         """
         self.node.print_log(
-            f"find_path: {start}, goal: {goal}, map:{len(self.grid_map)}"
+            f"cur_pos: {start}, goal: {goal}, map:{len(self.grid_map)}"
         )
         self.is_found = False
 

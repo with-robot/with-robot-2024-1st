@@ -252,7 +252,7 @@ def _heuristic_distance(a, b) -> int:
 def occ_gridmap(data:np=None) -> list[int]:
     data = pre_process(data)
     data = create_blockmap(data, map_size=(10, 10), _grid_size=10)
-    data = rotate_map_cw(data)
+    # data = rotate_map_cw(data)
     return data.tolist()
 
 
