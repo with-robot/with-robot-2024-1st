@@ -57,8 +57,8 @@ def pre_process(data) -> np.array:
     )
     filter = gaussian_kernel(5,1)
     # 패딩처리
-    data = np.pad(data, 3 // 2, mode="constant", constant_values=0)
-    data = data[2:,2:]
+    # data = np.pad(data, 3 // 2, mode="constant", constant_values=0)
+    # data = data[2:,2:]
 
     # 필터 적용
     # for row in range(2, data.shape[0] - 2):
@@ -121,7 +121,8 @@ def rotate_map_cw(data):
     # rotation_cw_90_2x2 = np.array([[0, 1],
                                 # [-1, 0]])
     # return np.dot(data, rotation_cw_90_2x2)
-    return np.rot90(data, k=1, axes=(0,1))
+    # return np.rot90(data, k=1, axes=(0,1))
+    return np.array(data).T
 
 def plot_map(data, map_size=100):
     # 그래프 설정
@@ -155,8 +156,8 @@ def main():
     data = np.loadtxt(f"{base_dir}/resource/occ_map.txt")
 
     data = pre_process(data)
-    # data = create_blockmap(data, map_size=(10,10), _grid_size=10)
-    # data = rotate_map_cw(data)
+    data = create_blockmap(data, map_size=(10,10), _grid_size=10)
+    data = rotate_map_cw(data)
     print(data)
     plot_map(data, map_size=10)
 

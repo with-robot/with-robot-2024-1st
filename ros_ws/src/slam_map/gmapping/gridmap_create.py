@@ -116,8 +116,10 @@ class GridmapPubNode(Node):
             # current_pos = (self.odometry.twist.linear.x+5.0, 5.0-self.odometry.twist.linear.y)
             # 좌표를 +축으로 이동. (-5 ~ 5 ) ==> (0, 10)
             current_pos = (self.odometry.twist.linear.x, self.odometry.twist.linear.y)
-            
-            theta = self.odometry.twist.angular.z + math.pi/2
+            theta = self.odometry.twist.angular.z
+            # if (self.nanoseconds // 1_000_000_000) % 3 == 0:
+            #     self.get_logger().info(f"gridmap current_pos: {current_pos}, angular: {theta}")
+
 
             if self.gridmap is None:
                 self.gridmap = GridMap(
@@ -130,14 +132,14 @@ class GridmapPubNode(Node):
             # ranges는 65개
             robot_body_offset = 0.1
 
-            for i, r in enumerate(reversed(scan.ranges)):
+            for i, range_ in enumerate(scan.ranges):
                 # if r <= scan.range_max and r >= scan.range_min:
-                if 0.0 < r + robot_body_offset < 10.0:
+                # if 0.0 < range_ + robot_body_offset < 10.0:
                     # 방사 각도
-                    yaw_ray = theta + scan.angle_min + i * scan.angle_increment
-                    # self.get_logger().info(f"distance r: {r}, yaw_ray:{yaw_ray}")
-                    # 위치, 각도, 길이, threathold확율값
-                    self.gridmap.add_ray(current_pos, yaw_ray, r, 0.7)
+                yaw_ray = (theta + scan.angle_min + i * scan.angle_increment)
+                # self.get_logger().info(f"scan: {range_}, yaw_ray: {yaw_ray}")
+                # 위치, 각도, 길이, threathold확율값
+                self.gridmap.add_ray(current_pos, yaw_ray, range_, 0.7)
 
             # pose와 measurement를 저장한다.
             # self.save_pose_measurement(scan)

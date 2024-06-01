@@ -103,24 +103,13 @@ def create_blockmap(data, _grid_size: int, map_size: tuple) -> np.array:
             else:
                 result[i, j] = 0
 
-    # 각 행에서 30개의 10x10 서브 배열 추출
-    # reshaped = np.reshape(data, (300, 30, 10))
-
-    # 축 전환 및 최종 형상 변환
-    # result = np.transpose(reshaped, (1, 0, 2)).reshape(30, 30, 10, 10)
-
-    # for i in range(0, _size):
-    #     for j in range(0, _size):
-    #         if result[i,j].sum() > 1:
-    #             t[i,j] =1
-
-    # for r, d in enumerate(data):
-    #     for c, e in enumerate(d):
-    #         if e.sum() > 1:
-    #             t[r,c] =1
-
     return result
 
+def flip_map(data:list, axis:int=0) -> list:    
+    return np.flip(data, axis=axis)
+
+def transpose_map(data:np.array):
+    return np.transpose(data, axes=(1, 0))
 
 def rotate_map_cw(data):
     # 2x2 시계 방향 90도 회전 행렬
@@ -249,10 +238,14 @@ def _heuristic_distance(a, b) -> int:
     return abs(x1 - x2) + abs(y1 - y2)
 
 
-def occ_gridmap(data:np=None) -> list[int]:
+def convert_map(data:np=None) -> list[int]:
     data = pre_process(data)
     data = create_blockmap(data, map_size=(10, 10), _grid_size=10)
+    # transpose
+    data = transpose_map(data)
     # data = rotate_map_cw(data)
+    #상하대칭 변환
+    # data = flip_map(data, 1)
     return data.tolist()
 
 
@@ -271,7 +264,7 @@ if __name__ == "__main__":
     data = ' '.join(map(str, data.flatten()))
     raw_data = np.fromstring(data, dtype=float, sep=' ')
 
-    map = occ_gridmap(raw_data)
+    map = convert_map(raw_data)
     print(map)
 
     paths = find_path(data, (1,1), (5,9))

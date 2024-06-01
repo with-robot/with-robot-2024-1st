@@ -35,7 +35,7 @@ class RobotController:
         self.__t_diff = -1
 
     # tf데이터 수신
-    def set_tfdata(self, twistStamped: object):
+    def update_pos(self, twistStamped: object):
         new_pose = (twistStamped.twist.linear.x, twistStamped.twist.linear.y)
         self.pos_data.cur = new_pose
         self.angular_data.cur = twistStamped.twist.angular.z
@@ -242,7 +242,7 @@ class RobotController:
             self.node.print_log(
                 f"[방향 변경] {self.dir_data.old} => {self.dir_data.cur}"
             )
-            return
+            return True
 
         # 간격을 두어 보정한다.
         # 잦은 조정에의한 좌우 흔들림 방지.
@@ -252,8 +252,10 @@ class RobotController:
             )
             self.node._send_message(title="수평보정", x=0.3, theta=amend_theta * 4 / 5)
             self.amend_h_count = 0
-        else:
-            self.amend_h_count += 1
+            return True
+    
+        self.amend_h_count += 1
+        return False    
 
     # 각도를 입력받아, 진행방향과 벗어난 각도를 반환한다.
     def _get_deviation_radian(self) -> tuple[float, str]:

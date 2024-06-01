@@ -19,7 +19,7 @@ def find_farthest_coordinate(map: list, base: tuple, exclude:list[tuple], log) -
             if arr[i, j] == 0:
                 cordinates.append((i, j))
     
-    log(f"cordinates:{cordinates}, exclude:{exclude}")
+    # log(f"cordinates:{cordinates}, exclude:{exclude}")
     # while True:
     #     _choice = random.choice(cordinates)
     #     if _choice != base:

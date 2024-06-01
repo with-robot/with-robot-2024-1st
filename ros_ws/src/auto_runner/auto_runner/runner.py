@@ -9,7 +9,7 @@ from geometry_msgs.msg import TwistStamped, Twist, Vector3
 from yolov8_msgs.srv import CmdMsg
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid
-from auto_runner.map_transform import occ_gridmap
+from auto_runner.map_transform import convert_map
 from auto_runner.lib import car_drive, common, path_location
 
 laser_scan: LaserScan = None
@@ -34,7 +34,7 @@ class GridMap(Node):
     def receive_map(self, map: OccupancyGrid):
         global grid_map
         raw_data = np.array(map.data, dtype=np.int8)
-        grid_map = occ_gridmap(raw_data)
+        grid_map = convert_map(raw_data)
 
 
 class LidarScanNode(Node):
@@ -96,20 +96,22 @@ class AStartSearchNode(Node):
         if not grid_map:
             return
 
-        # 센서 데이터
+        # 맵,위치데이터 수신
         self.robot_ctrl.update_map(grid_map)
-        self.robot_ctrl.set_tfdata(msg)
+        self.robot_ctrl.update_pos(msg)
 
         if self.is_near():
+            from random import randint
             # 급 감속
-            self._send_message(title="근접 후진", x=-1.0, theta=0.3)            
+            self._send_message(title="근접 후진", x=-1.0, theta=randint(-3,3)/10)
             return
 
         if self.robot_ctrl.check_rotate_state():
             return
 
-        # 직진, 방향 보정
-        self.robot_ctrl.adjust_body()
+        # 방향 보정
+        if self.robot_ctrl.adjust_body():
+            return
 
         # 로봇 다음동작
         try:
@@ -120,7 +122,7 @@ class AStartSearchNode(Node):
             return
 
         if self.robot_ctrl.is_rotate_state():
-                self._send_message(title="회전전 감속", x=-0.4)
+            self._send_message(title="회전전 감속", x=-0.4)
 
         # 제어메시지 발행
         self._send_message(title="주행지시", x=x, theta=theta)

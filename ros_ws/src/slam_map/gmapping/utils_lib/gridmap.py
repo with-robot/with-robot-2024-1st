@@ -57,9 +57,8 @@ class GridMap:
         points = list(bresenham_line(bres_start, bres_end, 1))
 
         # 범위 체크
-        if np.any(
-            x[0] < 0 or x[1] < 0 or x[0] >= self.limit or x[1] >= self.limit for x in points
-        ):
+        if any(((p[0] < 0) or (p[1] < 0) or (p[0] >= self.limit) or (p[1] >= self.limit)) for p in points):
+            # self.debugger.info(f"Out of range: {points}, limit:{self.limit}")
             points = list(map(lambda x: np.clip(x, 0, self.limit - 1), points))
 
         self.update_cell(points, p)
