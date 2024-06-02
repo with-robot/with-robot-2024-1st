@@ -33,14 +33,16 @@ class PathFinder:
         self.grid_map = map
 
     # 도착위치이면 새로운 도착위치를 반환한다.
-    def check_arrival(self, cur_dir):
+    def check_arrival(self, cur_dir, new_pos:None, finish:bool=False) -> bool:
 
         if self.dest_pos != self.cur_pos:
-            return
-
-        self.dest_pos = None
-        next_pos = self.check_and_dest(cur_dir)
-        self.node.print_log(f"<<arrived>> pos:{self.cur_pos}, next:{next_pos}")
+            return False
+        if not finish:
+            self.dest_pos = new_pos
+            self.paths = []
+            next_pos = self.check_and_dest(cur_dir)
+            self.node.print_log(f"<<arrived>> pos:{self.cur_pos}, next:{next_pos}")
+        return True
 
     # 다음위치 계산
     def check_and_dest(self, cur_dir) -> tuple[int, int]:
@@ -48,13 +50,13 @@ class PathFinder:
         self.node.print_log(f"<<check_and_dest>> dest_pos:{self.dest_pos}, paths0:{self.paths[0] if self.paths else ''}")
         
         _original_dest = None
-        if self.dest_pos:
-            if len(self.paths) > 1 and self.paths[0]==self.cur_pos:            
-                # 정상 이동 시, 경로를 재검색하지 않는다.
-                return self.paths[1]
-                
+        if self.dest_pos and self.paths:
             if self._check_pose_error(self.cur_pos):
                 _original_dest = self.dest_pos
+
+            elif len(self.paths) > 1 and self.paths[0]==self.cur_pos:            
+                # 정상 이동 시, 경로를 재검색하지 않는다.
+                return self.paths[1]
             else:
                 self.paths = self.paths[1:]
                 return self.paths[1]

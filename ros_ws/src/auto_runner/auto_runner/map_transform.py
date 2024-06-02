@@ -109,7 +109,15 @@ def flip_map(data:list, axis:int=0) -> list:
     return np.flip(data, axis=axis)
 
 def transpose_map(data:np.array):
-    return np.transpose(data, axes=(1, 0))
+    return np.transpose(data)
+
+def transpose2_map(data):
+    # 2x2 반시계 방향 90도 회전 행렬
+    # rotation_ccw_90_2x2 = np.array([[0, -1],
+    # [1, 0]])
+    # return np.dot(data, rotation_ccw_90_2x2)
+    data  = [(row for row in rows) for rows in data]
+    return data
 
 def rotate_map_cw(data):
     # 2x2 시계 방향 90도 회전 행렬
@@ -241,11 +249,13 @@ def _heuristic_distance(a, b) -> int:
 def convert_map(data:np=None) -> list[int]:
     data = pre_process(data)
     data = create_blockmap(data, map_size=(10, 10), _grid_size=10)
-    # transpose
+    # transpose x->y
+    # data = transpose2_map(data)
+    # flip -y->y
+    # data = flip_map(data)
+    # transpose x->y
     data = transpose_map(data)
-    # data = rotate_map_cw(data)
-    #상하대칭 변환
-    # data = flip_map(data, 1)
+    
     return data.tolist()
 
 

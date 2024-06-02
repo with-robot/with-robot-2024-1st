@@ -37,7 +37,12 @@ def find_farthest_coordinate(map: list, base: tuple, exclude:list[tuple], log) -
         return []
     
     # 거리가 가장 먼 좌표 찾기
-    farthest_coordinate = max(distances, key=lambda x: x[1])
+    top_k = 3
+    if len(distances) >= top_k:        
+        farthest_top_k_distances = sorted(distances, key=lambda x: x[1], reverse=True)[:top_k]
+        farthest_coordinate = random.choice(farthest_top_k_distances)
+    else:
+        farthest_coordinate = max(distances, key=lambda x: x[1])
 
     return farthest_coordinate[0]
 
@@ -72,19 +77,3 @@ def mmr_sampling(array, initial_sample, num_samples):
         sampled_indices.append(best_candidate)
 
     return flattened_array[sampled_indices]
-
-
-if __name__ == "__main__":
-    # # 10x10 배열 생성
-    # array = np.random.random((10, 10))
-
-    # # 첫 번째 샘플 값 입력
-    # initial_sample = int(input("첫 번째 샘플 값을 입력하세요: "))
-
-    # # MMR 방식으로 4개의 샘플 추가로 추출
-    # samples = mmr_sampling(array, initial_sample, 5)
-
-    # # 샘플 출력
-    # print("샘플된 값:", samples)
-
-    print(find_farthest_coordinate(0, 0))

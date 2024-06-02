@@ -130,12 +130,7 @@ class GridmapPubNode(Node):
                 )
 
             # ranges는 65개
-            robot_body_offset = 0.1
-
             for i, range_ in enumerate(scan.ranges):
-                # if r <= scan.range_max and r >= scan.range_min:
-                # if 0.0 < range_ + robot_body_offset < 10.0:
-                    # 방사 각도
                 yaw_ray = (theta + scan.angle_min + i * scan.angle_increment)
                 # self.get_logger().info(f"scan: {range_}, yaw_ray: {yaw_ray}")
                 # 위치, 각도, 길이, threathold확율값

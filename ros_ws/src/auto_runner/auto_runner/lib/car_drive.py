@@ -32,7 +32,7 @@ class RobotController:
         self.pos_data = StateData((0, 0), (0, 0))
         self.state_data = StateData(State.ROTATE_STOP, State.ROTATE_STOP)
         self.amend_h_count = 0
-        self.__t_diff = -1
+        self.__t_diff = None
 
     # tf데이터 수신
     def update_pos(self, twistStamped: object):
@@ -42,8 +42,10 @@ class RobotController:
 
         # 좌표설정
         self.path_finder.set_cur_pos(self.pos_data.cur)
+
+    def check_arrival(self, dest: tuple = None, finish: bool = False):
         # 도착처리_다음 목적지 설정
-        self.path_finder.check_arrival(self.dir_data.cur)
+        return self.path_finder.check_arrival(self.dir_data.cur, dest, finish)
 
     def update_map(self, grid_map: list):
         self.path_finder.update_map(grid_map)
@@ -90,15 +92,15 @@ class RobotController:
 
         elif _cur_dir == Dir.Y:
             if x1 > x0:
-                _torq_ang, _next_dir = LEFT_TURN, Dir._X  # 좌회전
-            elif x1 < x0:
                 _torq_ang, _next_dir = RIGHT_TURN, Dir.X  # 우회전
+            elif x1 < x0:
+                _torq_ang, _next_dir = LEFT_TURN, Dir._X  # 좌회전
 
         elif _cur_dir == Dir._Y:
             if x1 > x0:
                 _torq_ang, _next_dir = LEFT_TURN, Dir.X  # 좌회전
             elif x1 < x0:
-                _torq_ang, _next_dir = LEFT_TURN, Dir._X  # 우회전
+                _torq_ang, _next_dir = RIGHT_TURN, Dir._X  # 우회전
 
         if _torq_ang[1] != 0.0:
             self.state_data.shift(State.ROTATE_READY)
@@ -128,10 +130,7 @@ class RobotController:
 
     # 회전이 종료되면 True반환
     def check_rotate_state(self):
-        
-        self.node.print_log(
-            f"<<check_rotate_state>> state_data: {self.state_data}"
-        )
+
         if not self.is_rotate_state():
             return False
 
@@ -140,142 +139,111 @@ class RobotController:
         )
 
         def __angle_diff(cur, old):
-            __diff = (cur - old) % (2 * math.pi)
-            return __diff
+            diff = math.fabs(cur - old)
+            return diff if diff < math.pi * 3 / 2 else 2 * math.pi - diff
 
         __t_diff = __angle_diff(self.angular_data.cur, self.angular_data.old)
+        if not self.__t_diff:
+            self.__t_diff = __t_diff
 
         self.node.print_log(f"angular_diff: {__t_diff}")
-
         if (
             self.state_data.cur == State.ROTATE_START
-            and math.fabs((__t_diff - self.__t_diff) / __t_diff * 100) <= 2
+            and math.fabs(self.__t_diff - __t_diff) < 0.01
         ):
-            # 회전시작 후, 변동이 거의 없음 (2% 이내)
-            self.node._send_message(
-                title="미회전 재전", x=self.torq_ang[0] / 2, theta=self.torq_ang[1]
-            )
-            self.__t_diff = __t_diff
-            return True
+            self.node._send_message(title="회전 중 가속", x=self.torq_ang[0], theta=self.torq_ang[1])
+            return False
 
-        elif __t_diff > 0.1 and self.state_data.cur != State.ROTATE_START:
-            self.state_data.cur = State.ROTATE_START
-            self.__t_diff = __t_diff
-            return True
-
-        elif __t_diff < math.pi / 2 * 0.70:
-            self.__t_diff = __t_diff
-            return True
-
-        elif __t_diff < math.pi / 2 * 0.85:
-            break_torque = self._get_break_torque(__t_diff, math.pi / 2)
-            self.node._send_message(
-                title="회전 중 감속", x=break_torque, theta=self.torq_ang[1]
-            )
-            self.__t_diff = __t_diff
-            return True
-
-        else:
-            self.__t_diff = -1
+        elif __t_diff >= math.pi / 2 * 0.85:
             self.state_data.shift(State.ROTATE_STOP)
             return False
 
-        # elif __t_diff < math.pi / 2 * 0.8:
-        #     self.state_data.cur = State.ROTATE_START
-        #     return True
+        elif __t_diff >= math.pi / 2 * 0.70:
+            break_torque = self._get_break_torque(self.__t_diff, __t_diff, math.pi / 2)
+            self.node._send_message(title="회전 중 감속", x=break_torque)
+            self.__t_diff = __t_diff
 
-        # elif __t_diff < math.pi / 2 * 0.9 and  self._get_deviation_radian() < 5 / 180 * math.pi:
-        #     self.node._send_message(title="회전 브레이크", x=-0.2, theta=self.torq_ang[1])
-        #     return True
-        # else:
-        #     self.state_data.shift(State.ROTATE_STOP)
-        #     return False
+        elif __t_diff >= math.pi / 2 * 0.10:
+            self.state_data.cur = State.ROTATE_START
+            self.__t_diff = __t_diff
 
-    # def is_same_block(self, comparator: callable):
-    #     self.node.print_log(f"<<is_same_block>> pos_data: {self.pos_data}")
-    #     return comparator(self.pos_data.cur) == comparator(self.pos_data.old)
+        return True
 
+    # PID 제어
     def _get_break_torque(
         self,
-        angle: float,
+        old_angle: float,
+        new_angle: float,
         target_angle: float,
-        max_torque: float = 0.07,
-        min_torque: float = 0.02,
+        max_torque: float = 0.2,
+        min_torque: float = 0.01,
     ) -> float:
         """
         현재 회전각도에 따라 브레이크 토크의 크기를 결정한다.
         회전각도가 90도에 가까워질수록 토크 크기로 줄여나간다.
         """
-        _torque = (
-            (max_torque - min_torque)
-            * math.log(angle + 1.0)
-            / math.log(target_angle + 1.0)
-        )
-        # return -_torque if _torque > min_torque else -min_torque
-        return -1 * max(_torque, min_torque)
+        # der_torque = math.fabs((new_angle-old_angle)/old_angle)
+        # if der_torque * 100 < 30:
+        # return 0
+        _log_ratio = (math.log(new_angle + 1.0)) / math.log(target_angle + 1.0)
+
+        return -1 * max(max_torque * _log_ratio, min_torque)
 
     def _calc_dir(self):
         right_angle = math.pi / 2
         cur_angle = self.angular_data.cur % (2 * math.pi)
-        cur_angle += 2 * math.pi if cur_angle < 0 else 0
 
         if (
-            0 <= cur_angle <= right_angle *1/2
-            or right_angle*7/2 <= cur_angle<=4*right_angle
+            0 <= cur_angle <= right_angle * 1 / 2
+            or right_angle * 7 / 2 <= cur_angle <= 4 * right_angle
         ):
             return Dir.X
-        elif right_angle*1/2 <= cur_angle <= right_angle*3/2:
+        elif right_angle * 1 / 2 < cur_angle <= right_angle * 3 / 2:
             return Dir.Y
-        elif right_angle*3/2 <= cur_angle < right_angle*5/2:
+        elif right_angle * 3 / 2 < cur_angle <= right_angle * 5 / 2:
             return Dir._X
-        elif right_angle*5/2 <= cur_angle < right_angle*7/2:
+        elif right_angle * 5 / 2 < cur_angle <= right_angle * 7 / 2:
             return Dir._Y
 
     # 수평상태
     def adjust_body(self):
         amend_theta = self._get_deviation_radian()
         # 각도가 매우 틀어진 경우, 몸체의 방향을 변경한다.
-        if math.fabs(amend_theta) % (math.pi/2) > 0.7:
-            dir_ = self._calc_dir()
-            self.dir_data.shift(dir_)
+        # if math.fabs(amend_theta) > 0.6:
+        #     dir_ = self._calc_dir()
+        #     self.dir_data.shift(dir_)
 
-            self.node.print_log(
-                f"[방향 변경] {self.dir_data.old} => {self.dir_data.cur}"
-            )
-            return True
+        #     self.node.print_log(
+        #         f"[방향 변경] amend_theta:{amend_theta}: {self.dir_data.old} => {self.dir_data.cur}"
+        #     )
+        #     return True
 
         # 간격을 두어 보정한다.
         # 잦은 조정에의한 좌우 흔들림 방지.
-        if self.amend_h_count % 2 == 0 and abs(amend_theta) > 2 / 180 * math.pi:
+        if abs(amend_theta) > 3 / 180 * math.pi:
             self.node.print_log(
-                f"[{self.dir_data.cur} 위치보정] 보정 각:{amend_theta} / 기준:{2 / 180 * math.pi}"
+                f"[{self.dir_data.cur} 위치보정] {self.dir_data} >> 보정 각:{amend_theta} / 기준:{3 / 180 * math.pi}"
             )
-            self.node._send_message(title="수평보정", x=0.3, theta=amend_theta * 4 / 5)
-            self.amend_h_count = 0
-            return True
-    
-        self.amend_h_count += 1
-        return False    
+            self.node._send_message(title="수평보정", x=0.5, theta=amend_theta * 3 / 5)
+            # self.amend_h_count = 0
+            return self.pos_data.cur == self.pos_data.old
+
+        # self.amend_h_count += 1
+        return False
 
     # 각도를 입력받아, 진행방향과 벗어난 각도를 반환한다.
     def _get_deviation_radian(self) -> tuple[float, str]:
-        def __make_response(v: float):
-            v_abs = math.fabs(v)
-            return (
-                v
-                if v_abs < math.pi / 2
-                else math.copysign(1, v) * (2 * math.pi - v_abs)
-            )
-
         # 유니티에서 로봇의 기본회전상태가 180 CCW상태, 즉 음의 값.
         # 회전방향 수치를 양수로 정리한다.
+        # -0.1 => 6.23
         _cur_angle = self.angular_data.cur % (math.pi * 2)
-        _cur_angle = _cur_angle if _cur_angle > 0 else math.pi * 2 + _cur_angle
-
         _cur_dir = self.dir_data.cur
 
         if _cur_dir == Dir.X:
-            amend_theta = - _cur_angle
+            amend_theta = (
+                -_cur_angle if _cur_angle < math.pi / 2 else 2 * math.pi - _cur_angle
+            )
+
         elif _cur_dir == Dir._X:
             amend_theta = math.pi - _cur_angle
 
@@ -283,13 +251,14 @@ class RobotController:
             # -180 ~ -270
             # 차이량에 대해 음수면 바퀴가 우측방향으로 돌게된다. (우회전으로 보정)
             amend_theta = math.pi / 2 - _cur_angle
+
         elif _cur_dir == Dir._Y:
             amend_theta = math.pi * 3 / 2 - _cur_angle
 
         else:
             amend_theta = 0.0
 
-        return __make_response(amend_theta)
+        return amend_theta
 
     def do_stabilize(self):
         pass

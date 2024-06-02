@@ -36,7 +36,6 @@ class GridMap(Node):
         raw_data = np.array(map.data, dtype=np.int8)
         grid_map = convert_map(raw_data)
 
-
 class LidarScanNode(Node):
     def __init__(self) -> None:
         super().__init__("lidar_scan_node")
@@ -85,25 +84,31 @@ class AStartSearchNode(Node):
         self.get_logger().info(f"AStartpath_searchNode started...")
         self.setup()
 
-        _path_finder = path_location.PathFinder(self, algorithm="a-start")
+        _path_finder = path_location.PathFinder(
+            self, algorithm="a-start", dest_pos=(0, 2)
+        )
         self.robot_ctrl = car_drive.RobotController(self, _path_finder, common.Dir.X)
 
         self.get_logger().info(f"AStart_Path_Search_Mode has started...")
 
     def unity_tf_callback(
-        self, msg: TwistStamped
+        self, loc_data: TwistStamped
     ) -> None:  # msg로부터 위치정보를 추출
         if not grid_map:
             return
 
         # 맵,위치데이터 수신
         self.robot_ctrl.update_map(grid_map)
-        self.robot_ctrl.update_pos(msg)
+        self.robot_ctrl.update_pos(loc_data)
 
-        if self.is_near():
-            from random import randint
+        if self.robot_ctrl.check_arrival(finish=False):
+            return
+
+        is_near = self._is_near()
+        if is_near and False:
             # 급 감속
-            self._send_message(title="근접 후진", x=-1.0, theta=randint(-3,3)/10)
+            action = self.state_near
+            self._send_message(title="근접 후진", x=action[0], theta=action[1])
             return
 
         if self.robot_ctrl.check_rotate_state():
@@ -122,14 +127,13 @@ class AStartSearchNode(Node):
             return
 
         if self.robot_ctrl.is_rotate_state():
-            self._send_message(title="회전전 감속", x=-0.4)
+            self._send_message(title="회전전 감속", x=-0.6)
 
         # 제어메시지 발행
         self._send_message(title="주행지시", x=x, theta=theta)
 
-
     # 로봇이 전방물체와 50cm이내 접근상태이면 True를 반환
-    def is_near(self) -> bool:
+    def _is_near(self) -> tuple[bool, tuple]:
         if laser_scan:
             time = Time.from_msg(laser_scan.header.stamp)
             # Run if only laser scan from simulation is updated
@@ -137,30 +141,43 @@ class AStartSearchNode(Node):
                 self.nanoseconds = time.nanoseconds
 
                 ### Driving ###
-                nearest_distance = 0.6  # 50cm
-                # win = 8  # # of elements in forward, left, right sensor groups
-                # length = len(laser_scan.ranges)
-                # center = length // 2
-                # distances = []
-                # for i in range(length // 8):
-                #     if i * win < center and (i + 1) * win > center:
-                #         shift1, shift2 = 0, 1
-                #     elif (i + 1) * win < center:
-                #         shift1, shift2 = 0, 0
-                #     else:
-                #         shift1, shift2 = 1, 1
-                #     distances.append(
-                #         min(
-                #             laser_scan.ranges[win * i + shift1 : win * (i + 1) + shift2]
-                #         )
-                #     )
-                _distance = min(
-                        laser_scan.ranges[32-10:33+10]
-                    )
-                self.get_logger().info(
-                    f"distances:{_distance}/기준:{nearest_distance}"
+                nearest_distance = 0.3  # 50cm
+                
+                distance_map = {}
+                distance_map.update({0: min(laser_scan.ranges[0:8])}) # 우측
+                distance_map.update({1: min(laser_scan.ranges[8:16])})
+                distance_map.update({2: min(laser_scan.ranges[16:24])})
+                distance_map.update({3: min(laser_scan.ranges[24:28])})
+                
+                distance_map.update({4: min(laser_scan.ranges[28:37])}) # 중앙
+
+                distance_map.update({5: min(laser_scan.ranges[37:41])}) # 좌측
+                distance_map.update({6: min(laser_scan.ranges[41:49])})
+                distance_map.update({7: min(laser_scan.ranges[49:57])})
+                distance_map.update({8: min(laser_scan.ranges[57:65])})
+
+                min_distance = distance_map.get(4)
+                # map에서 value로 index를 찾는다.
+                torq_map = {
+                    2: -0.2,
+                    3: -0.5,
+                    4: -0.6,
+                    5: -0.5,
+                    6: -0.2,
+                }
+                min_index = next(
+                    key for key, value in distance_map.items() if value == min_distance
                 )
-                return _distance <= nearest_distance
+                angle = -1.0 if min_index < 4 else 0.0 if min_index ==4 else 1.0
+                torque = torq_map.get(min_index, 0.0)
+                
+                self.state_near = (torque, angle)
+
+                self.get_logger().info(
+                    f"distances:{min_distance}/기준:{nearest_distance}"
+                )
+                self.get_logger().info(f"index:{min_index}, T/A: {torque}/{angle}")
+                return min_distance <= nearest_distance
 
         return False
 
@@ -183,7 +200,7 @@ class AStartSearchNode(Node):
             response.success = False
 
         return response
-    
+
     def _send_message(
         self, *, title: str = None, x: float = 0.0, theta: float = 0.0
     ) -> None:
