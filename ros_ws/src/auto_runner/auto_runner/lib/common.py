@@ -1,12 +1,19 @@
-from enum import Enum
+from enum import Enum, auto
 from typing import TypeVar, Sequence
 
-class Dir(Enum):
+class Orient(Enum):
     X = "x"
     _X = "-x"
     Y = "y"
     _Y = "-y"
-
+class DirType(Enum):
+    LEFT = auto()
+    RIGHT = auto()
+class Orient(Enum):
+    N = "n"
+    S = "s"
+    E = "e"
+    W = "w"
 class State(Enum):    
     ROTATE_READY = 1
     ROTATE_START = 2
@@ -45,4 +52,4 @@ class StateData:
         self.cur = new_data
     
     def __repr__(self) -> str:
-        return f"[cur:{self.cur}, old:{self.old}]"
+        return f"[cur:{self.cur}, old:{self.old}]"    

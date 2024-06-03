@@ -1,5 +1,5 @@
 from collections import deque
-from auto_runner.lib.common import Dir, MessageHandler, TypeVar, Sequence
+from auto_runner.lib.common import Orient, MessageHandler, TypeVar, Sequence
 from auto_runner import mmr_sampling
 import re, math
 
@@ -110,7 +110,7 @@ class PathFinder:
 
     # a* method
     def _astar_method(
-        self, start: tuple[int, int], goal: tuple[int, int], init_dir: Dir = Dir.X
+        self, start: tuple[int, int], goal: tuple[int, int], init_dir: Orient = Orient.X
     ) -> list[Sequence[int]]:
         """
         A* 알고리즘을 사용하여 최단 경로를 찾습니다.
@@ -149,10 +149,10 @@ class PathFinder:
 
             x, y, cur_d = curr_node
             for next_x, next_y, next_d in (
-                (x + 1, y, Dir.X),
-                (x - 1, y, Dir._X),
-                (x, y + 1, Dir.Y),
-                (x, y - 1, Dir._Y),
+                (x + 1, y, Orient.X),
+                (x - 1, y, Orient._X),
+                (x, y + 1, Orient.Y),
+                (x, y - 1, Orient._Y),
             ):
                 if (
                     0 <= next_x < len(self.grid_map[1])
@@ -178,7 +178,7 @@ class PathFinder:
         return []
 
     # 방향 제한조건
-    def _check_if_backpath(self, cur_dir: Dir, next_dir: Dir) -> bool:
+    def _check_if_backpath(self, cur_dir: Orient, next_dir: Orient) -> bool:
         # -xx or x-x 패턴
         pattern = re.compile(r"^-(.)\1$|^(.)-\2$")
         # 후진 경로 배제

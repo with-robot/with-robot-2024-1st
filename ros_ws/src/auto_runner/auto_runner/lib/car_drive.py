@@ -1,5 +1,5 @@
 import math
-from auto_runner.lib.common import Dir, State, MessageHandler, TypeVar, StateData
+from auto_runner.lib.common import Orient, State, MessageHandler, TypeVar, StateData
 from auto_runner.lib.path_location import PathFinder
 
 LoggableNode = TypeVar("LoggableNode", bound=MessageHandler)
@@ -23,7 +23,7 @@ class RobotController:
     state_data: StateData
 
     def __init__(
-        self, node: LoggableNode, path_finder: PathFinder, dir: Dir = Dir.X
+        self, node: LoggableNode, path_finder: PathFinder, dir: Orient = Orient.X
     ) -> None:
         self.node = node
         self.path_finder = path_finder
@@ -78,29 +78,29 @@ class RobotController:
 
         _torq_ang = MOVE_FWD  # 직진
         _next_dir = self.dir_data.cur
-        if _cur_dir == Dir.X:
+        if _cur_dir == Orient.X:
             if y1 > y0:
-                _torq_ang, _next_dir = LEFT_TURN, Dir.Y  # 좌회전
+                _torq_ang, _next_dir = LEFT_TURN, Orient.Y  # 좌회전
             elif y1 < y0:
-                _torq_ang, _next_dir = RIGHT_TURN, Dir._Y  # 우회전
+                _torq_ang, _next_dir = RIGHT_TURN, Orient._Y  # 우회전
 
-        elif _cur_dir == Dir._X:
+        elif _cur_dir == Orient._X:
             if y1 > y0:
-                _torq_ang, _next_dir = RIGHT_TURN, Dir.Y  # 우회전
+                _torq_ang, _next_dir = RIGHT_TURN, Orient.Y  # 우회전
             elif y1 < y0:
-                _torq_ang, _next_dir = LEFT_TURN, Dir._Y  # 좌회전
+                _torq_ang, _next_dir = LEFT_TURN, Orient._Y  # 좌회전
 
-        elif _cur_dir == Dir.Y:
+        elif _cur_dir == Orient.Y:
             if x1 > x0:
-                _torq_ang, _next_dir = RIGHT_TURN, Dir.X  # 우회전
+                _torq_ang, _next_dir = RIGHT_TURN, Orient.X  # 우회전
             elif x1 < x0:
-                _torq_ang, _next_dir = LEFT_TURN, Dir._X  # 좌회전
+                _torq_ang, _next_dir = LEFT_TURN, Orient._X  # 좌회전
 
-        elif _cur_dir == Dir._Y:
+        elif _cur_dir == Orient._Y:
             if x1 > x0:
-                _torq_ang, _next_dir = LEFT_TURN, Dir.X  # 좌회전
+                _torq_ang, _next_dir = LEFT_TURN, Orient.X  # 좌회전
             elif x1 < x0:
-                _torq_ang, _next_dir = RIGHT_TURN, Dir._X  # 우회전
+                _torq_ang, _next_dir = RIGHT_TURN, Orient._X  # 우회전
 
         if _torq_ang[1] != 0.0:
             self.state_data.shift(State.ROTATE_READY)
@@ -197,13 +197,13 @@ class RobotController:
             0 <= cur_angle <= right_angle * 1 / 2
             or right_angle * 7 / 2 <= cur_angle <= 4 * right_angle
         ):
-            return Dir.X
+            return Orient.X
         elif right_angle * 1 / 2 < cur_angle <= right_angle * 3 / 2:
-            return Dir.Y
+            return Orient.Y
         elif right_angle * 3 / 2 < cur_angle <= right_angle * 5 / 2:
-            return Dir._X
+            return Orient._X
         elif right_angle * 5 / 2 < cur_angle <= right_angle * 7 / 2:
-            return Dir._Y
+            return Orient._Y
 
     # 수평상태
     def adjust_body(self):
@@ -239,20 +239,20 @@ class RobotController:
         _cur_angle = self.angular_data.cur % (math.pi * 2)
         _cur_dir = self.dir_data.cur
 
-        if _cur_dir == Dir.X:
+        if _cur_dir == Orient.X:
             amend_theta = (
                 -_cur_angle if _cur_angle < math.pi / 2 else 2 * math.pi - _cur_angle
             )
 
-        elif _cur_dir == Dir._X:
+        elif _cur_dir == Orient._X:
             amend_theta = math.pi - _cur_angle
 
-        elif _cur_dir == Dir.Y:
+        elif _cur_dir == Orient.Y:
             # -180 ~ -270
             # 차이량에 대해 음수면 바퀴가 우측방향으로 돌게된다. (우회전으로 보정)
             amend_theta = math.pi / 2 - _cur_angle
 
-        elif _cur_dir == Dir._Y:
+        elif _cur_dir == Orient._Y:
             amend_theta = math.pi * 3 / 2 - _cur_angle
 
         else:

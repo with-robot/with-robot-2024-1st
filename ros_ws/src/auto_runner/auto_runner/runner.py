@@ -87,7 +87,7 @@ class AStartSearchNode(Node):
         _path_finder = path_location.PathFinder(
             self, algorithm="a-start", dest_pos=(0, 2)
         )
-        self.robot_ctrl = car_drive.RobotController(self, _path_finder, common.Dir.X)
+        self.robot_ctrl = car_drive.RobotController(self, _path_finder, common.Orient.X)
 
         self.get_logger().info(f"AStart_Path_Search_Mode has started...")
 
