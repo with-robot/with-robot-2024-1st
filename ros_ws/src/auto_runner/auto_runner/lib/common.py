@@ -9,11 +9,6 @@ class Orient(Enum):
 class DirType(Enum):
     LEFT = auto()
     RIGHT = auto()
-class Orient(Enum):
-    N = "n"
-    S = "s"
-    E = "e"
-    W = "w"
 class State(Enum):    
     ROTATE_READY = 1
     ROTATE_START = 2

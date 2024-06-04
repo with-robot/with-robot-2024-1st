@@ -27,17 +27,19 @@ class RotationManger:
         self.cmd = messagenser
 
     # 비동기로 callback
-    def add_observer(self, o: object):
-        self.observers.append(o)
-        self.start_angle = SensorData.tf_sensor.angle
-
+    @classmethod
+    def add_observer(cls, o: object):
+        cls.observers.append(o)
+        
+    @classmethod
     def notifyall(self, m: any):
         for o in self.observers:
             o.update(m)
 
-    def start(self, callback: object, dir:Orient, orient:DirType=DirType.LEFT):
-        self.dir=dir
-        self.orient=orient
+    def start(self, callback: object, dir: Orient, orient: DirType = DirType.LEFT):
+        self.dir = dir
+        self.orient = orient
+        self.target_angle = self.get_target_angle(dir, orient)
         self.add_observer(callback)
 
         global state
@@ -49,35 +51,41 @@ class RotationManger:
         threading(target=self.run).start()
 
     def run(self):
-        old_angle_diff = 0.001
         while True:
             # 회전각 계산
-            angle_diff = self.calc_misalignment()
+            angle_diff = self.get_diff()
 
             # 회전완료 여부 체크
-            if angle_diff > (math.pi / 2) * 0.75 or (angle_diff - old_angle_diff)/old_angle_diff <= 0.05:
+            if abs(angle_diff) < 0.2:                
                 global state
                 state = State.ROTATE_STOP
                 self.notifyall(angle_diff)
                 break
 
-            self.roate_angle(0.15)
-            old_angle_diff = angle_diff
+            sign_ = math.copysign(1, angle_diff)
+            self.roate_angle(torque=0.15, sign=sign_)
 
             time.sleep(0.1)
+    
+    # 목표 각도 설정
+    def get_target_angle(self, orient: Orient, dir: DirType) -> float:
+        if (orient==Orient.X and dir==DirType.LEFT) or (orient==Orient._X and dir==DirType.RIGHT):
+            return math.pi/2
+        elif (orient==Orient.Y and dir==DirType.LEFT) or (orient==Orient._Y and dir==DirType.RIGHT):
+            return math.pi
+        elif (orient==Orient.X and dir==DirType.RIGHT) or (orient==Orient._Y and dir==DirType.LEFT):
+            return 3*math.pi/2
+        else:
+            return 2*math.pi
+        
+    def roate_angle(self, torque: float, sign:int):
+        self.cmd(torque=torque, angle=1.35*sign)
 
-    def roate_angle(self, torque: float):
-        self.cmd(torque=torque, angle=1.35)
-
-    def calc_misalignment(self):
-        cur_angle = SensorData.tf_sensor.angle
-        return cur_angle - self.start_angle
-
-    # 막다른 골목위치 체크
-    def check_obstacle(self):
-        # 후진모드설정
-        pass
-
+    # 반환값이 양수면 반시계방향으로 보정해야함
+    def get_diff(self):
+        cur_angle = SensorData.tf_sensor.angle % (2*math.pi)
+        cur_angle = cur_angle if cur_angle > self.target_angle else (cur_angle + 2*math.pi)
+        return self.target_angle - cur_angle
 
 class MoveManager:
     def __init__(self, node: MessageHandler, state_data: StateData):
