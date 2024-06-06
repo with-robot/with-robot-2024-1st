@@ -36,6 +36,7 @@ class GridMap(Node):
         raw_data = np.array(map.data, dtype=np.int8)
         grid_map = convert_map(raw_data)
 
+
 class LidarScanNode(Node):
     def __init__(self) -> None:
         super().__init__("lidar_scan_node")
@@ -105,7 +106,7 @@ class AStartSearchNode(Node):
             return
 
         is_near = self._is_near()
-        if is_near and False:
+        if is_near:
             # 급 감속
             action = self.state_near
             self._send_message(title="근접 후진", x=action[0], theta=action[1])
@@ -127,7 +128,7 @@ class AStartSearchNode(Node):
             return
 
         if self.robot_ctrl.is_rotate_state():
-            self._send_message(title="회전전 감속", x=-0.6)
+            self._send_message(title="회전전 감속", x=-0.8)
 
         # 제어메시지 발행
         self._send_message(title="주행지시", x=x, theta=theta)
@@ -142,16 +143,16 @@ class AStartSearchNode(Node):
 
                 ### Driving ###
                 nearest_distance = 0.3  # 50cm
-                
+
                 distance_map = {}
-                distance_map.update({0: min(laser_scan.ranges[0:8])}) # 우측
+                distance_map.update({0: min(laser_scan.ranges[0:8])})  # 우측
                 distance_map.update({1: min(laser_scan.ranges[8:16])})
                 distance_map.update({2: min(laser_scan.ranges[16:24])})
                 distance_map.update({3: min(laser_scan.ranges[24:28])})
-                
-                distance_map.update({4: min(laser_scan.ranges[28:37])}) # 중앙
 
-                distance_map.update({5: min(laser_scan.ranges[37:41])}) # 좌측
+                distance_map.update({4: min(laser_scan.ranges[28:37])})  # 중앙
+
+                distance_map.update({5: min(laser_scan.ranges[37:41])})  # 좌측
                 distance_map.update({6: min(laser_scan.ranges[41:49])})
                 distance_map.update({7: min(laser_scan.ranges[49:57])})
                 distance_map.update({8: min(laser_scan.ranges[57:65])})
@@ -168,9 +169,9 @@ class AStartSearchNode(Node):
                 min_index = next(
                     key for key, value in distance_map.items() if value == min_distance
                 )
-                angle = -1.0 if min_index < 4 else 0.0 if min_index ==4 else 1.0
+                angle = -1.0 if min_index < 4 else 0.0 if min_index == 4 else 1.0
                 torque = torq_map.get(min_index, 0.0)
-                
+
                 self.state_near = (torque, angle)
 
                 self.get_logger().info(

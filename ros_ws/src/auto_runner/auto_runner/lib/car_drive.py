@@ -1,5 +1,5 @@
 import math
-from auto_runner.lib.common import Orient, State, MessageHandler, TypeVar, StateData
+from auto_runner.lib.common import Orient, State, MessageHandler, TypeVar, StateData, DirType
 from auto_runner.lib.path_location import PathFinder
 
 LoggableNode = TypeVar("LoggableNode", bound=MessageHandler)
@@ -12,9 +12,9 @@ class RobotController:
     # 회전토크
     # 회전각도
     # 직진토크
-    rotate_torque = 0.8
+    rotate_torque = 0.3
     rot_angle_ccw = 1.3  # 0.85 * math.pi / 2.0 => 76도
-    fwd_torque = 0.6
+    fwd_torque = 0.5
 
     # x,y좌표 (x는 전후, y는 좌우)
     dir_data: StateData
@@ -55,6 +55,7 @@ class RobotController:
         cur_pos = self.path_finder.cur_pos
 
         # 정상괘도 이탈시에만 경로 재검색.
+        # next_pos = self.path_finder.check_and_dest(self.dir_data.cur)
         if self.path_finder._check_pose_error(cur_pos):
             next_pos = self.path_finder.check_and_dest(self.dir_data.cur)
         else:
@@ -139,35 +140,38 @@ class RobotController:
         )
 
         def __angle_diff(cur, old):
+            old %= (2*math.pi)
             diff = math.fabs(cur - old)
             return diff if diff < math.pi * 3 / 2 else 2 * math.pi - diff
 
-        __t_diff = __angle_diff(self.angular_data.cur, self.angular_data.old)
-        if not self.__t_diff:
-            self.__t_diff = __t_diff
+        # __t_diff = __angle_diff(self.angular_data.cur, self.angular_data.old)
+        orient = self.dir_data.old
+        dir = DirType.LEFT if math.copysign(1, self.torq_ang[1]) >0 else DirType.RIGHT
+        __t_diff = __angle_diff(self._get_target_angle(orient, dir), self.angular_data.cur)
+        
+        self.node.print_log(f"angular_diff: {__t_diff}, cur_stat:{self.state_data.cur}")
 
-        self.node.print_log(f"angular_diff: {__t_diff}")
-        if (
-            self.state_data.cur == State.ROTATE_START
-            and math.fabs(self.__t_diff - __t_diff) < 0.01
-        ):
-            self.node._send_message(title="회전 중 가속", x=self.torq_ang[0], theta=self.torq_ang[1])
-            return False
-
-        elif __t_diff >= math.pi / 2 * 0.85:
+        if __t_diff < 0.2 and self.state_data.cur==State.ROTATE_START:
             self.state_data.shift(State.ROTATE_STOP)
+            self.node._send_message(title="회전토크 0.01", x=0.01, theta=self.torq_ang[1])
             return False
-
-        elif __t_diff >= math.pi / 2 * 0.70:
-            break_torque = self._get_break_torque(self.__t_diff, __t_diff, math.pi / 2)
-            self.node._send_message(title="회전 중 감속", x=break_torque)
-            self.__t_diff = __t_diff
-
-        elif __t_diff >= math.pi / 2 * 0.10:
-            self.state_data.cur = State.ROTATE_START
-            self.__t_diff = __t_diff
-
-        return True
+        else:
+            if __t_diff >= 0.2:
+                self.state_data.cur = State.ROTATE_START
+            self.node._send_message(title="회전토크 0.15", x=0.15, theta=self.torq_ang[1])
+            return True
+        
+    
+    # 목표 각도 설정
+    def _get_target_angle(self, orient: Orient, dir: DirType) -> float:
+        if (orient==Orient.X and dir==DirType.LEFT) or (orient==Orient._X and dir==DirType.RIGHT):
+            return math.pi/2
+        elif (orient==Orient.Y and dir==DirType.LEFT) or (orient==Orient._Y and dir==DirType.RIGHT):
+            return math.pi
+        elif (orient==Orient.X and dir==DirType.RIGHT) or (orient==Orient._Y and dir==DirType.LEFT):
+            return 3*math.pi/2
+        else:
+            return 2*math.pi
 
     # PID 제어
     def _get_break_torque(
@@ -224,7 +228,7 @@ class RobotController:
             self.node.print_log(
                 f"[{self.dir_data.cur} 위치보정] {self.dir_data} >> 보정 각:{amend_theta} / 기준:{3 / 180 * math.pi}"
             )
-            self.node._send_message(title="수평보정", x=0.5, theta=amend_theta * 3 / 5)
+            self.node._send_message(title="수평보정", x=0.5, theta=amend_theta)
             # self.amend_h_count = 0
             return self.pos_data.cur == self.pos_data.old
 
