@@ -23,7 +23,9 @@ setup(
         "console_scripts": [
             "web_control = jetauto_control.web_control:main",
             "object_detection = jetauto_control.yolov8_ros2_pt:main",
-            "object_detection_viz = jetauto_control.yolov8_ros2_subscriber:main"
+            "object_detection_viz = jetauto_control.yolov8_ros2_subscriber:main",
+            "lidar_driving = jetauto_control.lidar_driving_v2:main",
+
         ],
     },
 )
