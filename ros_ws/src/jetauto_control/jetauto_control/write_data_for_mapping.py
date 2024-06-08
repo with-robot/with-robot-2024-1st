@@ -12,18 +12,6 @@ from sensor_msgs.msg import LaserScan
 import cv2
 import numpy as np
 
-import os
-import sys
-library_path = "/root/Workspace/with-robot-2024-1st/ros_ws/src/mapping"
-if not library_path in sys.path:
-    sys.path.append(library_path)
-from utils import (
-    visualization_pose,
-    get_robot_pose,
-    parse_measurment_data,
-    find_corresponding_measurement_idx,
-)
-
 
 driver = None
 
@@ -55,37 +43,6 @@ class JetautoMapping(Node):
         )
         self.odometry = None
 
-        self.measurement_data = []
-        self.pose_data = []
-        self.buffer_length = 100
-
-        # Prepare output directories
-        out_root = "output"
-        os.makedirs(out_root, exist_ok=True)
-
-        self.out_pose_map_dir = os.path.join(out_root, "pose_maps")
-        os.makedirs(self.out_pose_map_dir, exist_ok=True)
-
-        # Sensor info
-        num_rays = 65
-        angle_min = -np.pi / 2
-        angle_max = np.pi / 2
-        angle_increment = np.pi / (num_rays - 1)
-        self.sensorThetas = []
-        for i in range(num_rays):
-            self.sensorThetas.append(angle_min + i * angle_increment)
-
-        # Initialize map
-        self.pose_map_array = np.zeros([
-            500,
-            500,
-            3],
-            dtype=np.uint8
-        )
-        self.pose_map_array[...] = 100
-
-        self.time_idx = 0
-
 #        # car control publisher
 #        self.pub_jetauto_car = self.create_publisher(
 #            Twist,
@@ -109,33 +66,6 @@ class JetautoMapping(Node):
 #        if not self.pose_txt.closed:
 #            self.pose_txt.close()
 
-    def generate_map(self):
-        p_time_stamp, robotX, robotY, robotZ, rot_mat, robotTheta = \
-            get_robot_pose(self.pose_data[-1])
-        m_idx, time_diff = find_corresponding_measurement_idx(
-            p_time_stamp,
-            self.measurement_data,
-        )
-
-        measurements = self.measurement_data[m_idx]
-        measurementData = parse_measurment_data(measurements)
-
-        visualization_pose(
-            self.pose_map_array,
-            #self.time_idx,
-            0,
-            robotX,
-            robotY,
-            robotZ,
-            rot_mat,
-            robotTheta,
-            self.sensorThetas,
-            measurementData,
-            self.out_pose_map_dir,
-        )
-
-        self.time_idx += 1
-
     def lidar_callback(self, msg):
         self.laser_scan = msg
         #self.get_logger().info(f'{msg}')
@@ -145,23 +75,13 @@ class JetautoMapping(Node):
             time = Time.from_msg(self.laser_scan.header.stamp)
             if time.nanoseconds > self.lidar_nanoseconds:
                 self.lidar_nanoseconds = time.nanoseconds
-                data = [time.nanoseconds]
+
+                # Write sensor measurement data for mapping
+                self.measurement_txt.write(f"{time.nanoseconds} ")
                 length = len(self.laser_scan.ranges)
                 for i in range(length):
-                    data.append(self.laser_scan.ranges[i])
-                self.measurement_data.append(tuple(data))
-
-                self.generate_map()
-
-                if len(self.measurement_data) > self.buffer_length:
-                    self.measurement_data.pop(0)
-
-#                # Write sensor measurement data for mapping
-#                self.measurement_txt.write(f"{time.nanoseconds} ")
-#                length = len(self.laser_scan.ranges)
-#                for i in range(length):
-#                    self.measurement_txt.write(f"{self.laser_scan.ranges[i]} ")
-#                self.measurement_txt.write(f"\n")
+                    self.measurement_txt.write(f"{self.laser_scan.ranges[i]} ")
+                self.measurement_txt.write(f"\n")
 
     def odom_callback(self, msg):
         self.odometry = msg
@@ -173,28 +93,15 @@ class JetautoMapping(Node):
             if time.nanoseconds > self.odometry_nanoseconds:
                 self.odometry_nanoseconds = time.nanoseconds
 
-                self.pose_data.append((
-                    time.nanoseconds,
-                    self.odometry.twist.linear.x,
-                    self.odometry.twist.linear.y,
-                    self.odometry.twist.linear.z,
-                    self.odometry.twist.angular.x,
-                    self.odometry.twist.angular.y,
-                    self.odometry.twist.angular.z,
-                ))
-
-                if len(self.pose_data) > self.buffer_length:
-                    self.pose_data.pop(0)
-
-#                # Write odeomtry data for mapping
-#                self.pose_txt.write(f"{time.nanoseconds} ")
-#                self.pose_txt.write(f"{self.odometry.twist.linear.x} ")
-#                self.pose_txt.write(f"{self.odometry.twist.linear.y} ")
-#                self.pose_txt.write(f"{self.odometry.twist.linear.z} ")
-#                self.pose_txt.write(f"{self.odometry.twist.angular.x} ")
-#                self.pose_txt.write(f"{self.odometry.twist.angular.y} ")
-#                self.pose_txt.write(f"{self.odometry.twist.angular.z} ")
-#                self.pose_txt.write(f"\n")
+                # Write odeomtry data for mapping
+                self.pose_txt.write(f"{time.nanoseconds} ")
+                self.pose_txt.write(f"{self.odometry.twist.linear.x} ")
+                self.pose_txt.write(f"{self.odometry.twist.linear.y} ")
+                self.pose_txt.write(f"{self.odometry.twist.linear.z} ")
+                self.pose_txt.write(f"{self.odometry.twist.angular.x} ")
+                self.pose_txt.write(f"{self.odometry.twist.angular.y} ")
+                self.pose_txt.write(f"{self.odometry.twist.angular.z} ")
+                self.pose_txt.write(f"\n")
 
 #    def publish_callback(self):
 #        x, z = 0.0, 0.0
