@@ -59,7 +59,7 @@ class RobotController:
         if self.path_finder._check_pose_error(cur_pos):
             next_pos = self.path_finder.check_and_dest(self.dir_data.cur)
         else:
-            next_pos = self.path_finder.get_next_pos(cur_pos)
+            next_pos = self.path_finder.next_pos(cur_pos)
 
         if not next_pos:
             self.stop_car()
@@ -128,9 +128,21 @@ class RobotController:
     def check_obstacle(self):
         # 후진모드설정
         pass
+    
+    def check_straight_state(self) -> bool:
+        if self.is_rotate_state():
+            # 회전이 끝난다음 직진 상태인지 체크
+            return False
 
+        self.node.print_log(
+            f"<<on_straight>> dir_data: {self.dir_data}, angular_data: {self.angular_data}"
+        )
+
+        # 직진 상태인지 체크
+        return self.pos_data.cur == self.path_finder.get_next_pos()
+    
     # 회전이 종료되면 True반환
-    def check_rotate_state(self):
+    def check_rotate_state(self) -> bool:
 
         if not self.is_rotate_state():
             return False
