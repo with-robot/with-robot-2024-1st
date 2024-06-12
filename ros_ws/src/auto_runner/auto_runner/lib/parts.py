@@ -12,11 +12,12 @@ import asyncio
 
 state: State = State.ROTATE_STOP
 
+
 class PolicyType(Enum):
-    ROTATE =auto()
+    ROTATE = auto()
     STRAIGHT = auto()
     BACk = auto()
-    
+
 
 class SensorData:
     tf_sensor: any
@@ -27,9 +28,66 @@ class SensorData:
         cls.tf_sensor = tf_data
         cls.lidar = scan_data
 
+
 class MoveManager:
     def __init__(self, messagenser: MessageHandler):
         self.cmd = messagenser
+
+    def adjust_body(self):
+        amend_theta = self._get_deviation_radian()
+        # 각도가 매우 틀어진 경우, 몸체의 방향을 변경한다.
+        # if math.fabs(amend_theta) > 0.6:
+        #     dir_ = self._calc_dir()
+        #     self.dir_data.shift(dir_)
+
+        #     self.node.print_log(
+        #         f"[방향 변경] amend_theta:{amend_theta}: {self.dir_data.old} => {self.dir_data.cur}"
+        #     )
+        #     return True
+
+        # 간격을 두어 보정한다.
+        # 잦은 조정에의한 좌우 흔들림 방지.
+        if abs(amend_theta) > 3 / 180 * math.pi:
+            self.node.print_log(
+                f"[{self.dir_data.cur} 위치보정] {self.dir_data} >> 보정 각:{amend_theta} / 기준:{3 / 180 * math.pi}"
+            )
+            self.node._send_message(title="수평보정", x=0.5, theta=amend_theta)
+            # self.amend_h_count = 0
+            return self.pos_data.cur == self.pos_data.old
+
+        # self.amend_h_count += 1
+        return False
+
+    # 각도를 입력받아, 진행방향과 벗어난 각도를 반환한다.
+    def _get_deviation_radian(self) -> tuple[float, str]:
+        # 유니티에서 로봇의 기본회전상태가 180 CCW상태, 즉 음의 값.
+        # 회전방향 수치를 양수로 정리한다.
+        # -0.1 => 6.23
+        _cur_angle = self.angular_data.cur % (math.pi * 2)
+        _cur_dir = self.dir_data.cur
+
+        if _cur_dir == Orient.X:
+            amend_theta = (
+                -_cur_angle if _cur_angle < math.pi / 2 else 2 * math.pi - _cur_angle
+            )
+
+        elif _cur_dir == Orient._X:
+            amend_theta = math.pi - _cur_angle
+
+        elif _cur_dir == Orient.Y:
+            # -180 ~ -270
+            # 차이량에 대해 음수면 바퀴가 우측방향으로 돌게된다. (우회전으로 보정)
+            amend_theta = math.pi / 2 - _cur_angle
+
+        elif _cur_dir == Orient._Y:
+            amend_theta = math.pi * 3 / 2 - _cur_angle
+
+        else:
+            amend_theta = 0.0
+
+        return amend_theta
+
+
 class RotationManger:
     observers: list[object]
     start_angle: float
@@ -106,80 +164,97 @@ class RotationManger:
         )
         return self.target_angle - cur_angle
 
-class PolicyResult:
-    policy:'Policy'
-    is_done:bool
-    kwargs:dict
 
-    def __init__(self, policy:'Policy', apply_result:bool, kwargs:dict):
+class PolicyResult:
+    policy: "Policy"
+    is_done: bool
+    kwargs: dict
+
+    def __init__(self, policy: "Policy", apply_result: bool, kwargs: dict):
         self.policy = policy
         self.is_done = apply_result
         self.kwargs = kwargs
 
+
 # 다음 처리방향을 세운다.
 class Policy:
-    apply_result:bool
-    apply_kwargs:dict
+    apply_result: bool
+    apply_kwargs: dict
 
-    def __init__(self, policy:PolicyType):
+    def __init__(self, policy: PolicyType):
         _action_map = {
             PolicyType.ROTATE: self.rotate,
             PolicyType.STRAIGHT: self.move_straight,
             PolicyType.BACk: self.move_back,
         }
-            
+
         self.policy_plan = _action_map.get(policy)
-        self.rcntrler = RobotController()
         self.rotate_manager = RotationManger(self.rcntrler.cmd)
+        self.move_manager = MoveManager(self.rcntrler.cmd)
 
     def apply(self, **kwargs):
-        # 3. 단기 목표설정
-        self.policy_plan(**kwargs)
+        # 3. 단기 목표설정 TODO:
+        self.policy_plan(dir=kwargs.get('dir'), orient=kwargs.get('orient'))
         self.apply_kwargs = kwargs
 
     def report(self):
-        return PolicyResult(policy=self, apply_result=self.apply_result, kwargs=self.apply_kwargs)
-    
+        return PolicyResult(
+            policy=self, apply_result=self.apply_result, kwargs=self.apply_kwargs
+        )
+
     def move_back(self, **kwargs):
         pass
 
     def move_straight(self, **kwargs):
-        self.apply_result = self.rcntrler.check_straight_state(**kwargs)
-    
-    def rotate(self, **kwargs):        
-        self.apply_result = self.rcntrler.check_rotate_state(**kwargs)
-    
+        self.move_manager.start(**kwargs)
+        # self.apply_result = self.rcntrler.check_straight_state(**kwargs)
+
+    def rotate(self, **kwargs):
+        self.rotate_manager.start(**kwargs)
+        # self.apply_result = self.rcntrler.check_rotate_state(**kwargs)
+
 
 class RobotContler:
     def __init__(self):
         # 맵을 가진다.
-        self.pathfinder = PathFinder(algorithm='a-star', dest_pos=(0,0))
+        self.pathfinder = PathFinder(algorithm="a-star", dest_pos=(0, 0))
 
-    def pos(self, pos: tuple=(0,0)):
+    def pos(self, pos: tuple = (0, 0)):
         self.cur_pos = self.pathfinder.set_cur_pos(pos)
 
-    def move(self, dest_pos: tuple) -> PolicyResult:
+    def operate(self, dest_pos: tuple) -> PolicyResult:
 
         try:
             self.check_arrived(dest_pos)
 
             # 경로와 방향을 정한다.
-            policy:Policy = self.make_policy(dest_pos)
-            policy.apply()
+            policy: Policy = self._policy(dest_pos)
+            kwargs = {
+                'callback':self.callback_func,
+                'dir':'',
+                'orient':''
+            }
+            policy.apply(**kwargs)
 
             return policy.report()
-            
+
         except Exception as e:
             print(e)
             if e == "arrived":
                 return
-            elif e=='no policy':
+            elif e == "no policy":
                 return
 
-    def make_policy(self, dest_pos: tuple) -> PolicyType:
-        # 가야 할 전략
-        _policy:PolicyType = None
+    def _policy(self, dest_pos: tuple) -> PolicyType:
         
+        def __check_rotate_policy(self, path: list[tuple]) -> bool:
+            if self.path[0] == path[1]:
+                return False
+            else:
+                return True
+        # 가야 할 전략
+        _policy: PolicyType = None
+
         # 1. 후진 계획
         if self.pathfinder.is_intrap():
             self.pathfinder.back_path()
@@ -189,27 +264,23 @@ class RobotContler:
             # 2. 전진 계획
             _path = self.pathfinder.find_path(dest_pos)
 
-            if self.check_rotate_policy(_path):
+            if __check_rotate_policy(_path):
                 _policy = Policy(PolicyType.ROTATE)
             else:
                 _policy = Policy(PolicyType.STRAIGHT)
-            
+
             if _policy == None:
                 raise Exception("no policy")
-        
-        return _policy
 
+        return _policy
 
     def check_arrived(self, dest_pos: tuple):
         if self.pathfinder.cur_pos == dest_pos:
             self.notifyall(dest_pos)
             raise Exception("arrived")
-        
-    def check_rotate_policy(self, path:list[tuple]) -> bool:
-        if self.path[0] == path[1]:
-            return False
-        else:
-            return True
+    
+    def callback_func(self, **kwargs):
+        print(kwargs)
 
     def notifyall(self, m: any):
         for o in self.observers:
