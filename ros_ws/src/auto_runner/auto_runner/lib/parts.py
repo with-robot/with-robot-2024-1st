@@ -9,7 +9,7 @@ import threading
 import time
 import asyncio
 
-
+state = {}
 state: State = State.ROTATE_STOP
 
 class PolicyType(Enum):
@@ -27,56 +27,138 @@ class SensorData:
         cls.tf_sensor = tf_data
         cls.lidar = scan_data
 
-class MoveManager:
-    def __init__(self, messagenser: MessageHandler):
-        self.cmd = messagenser
-class RotationManger:
-    observers: list[object]
-    start_angle: float
+class Message:
+    cmd:dict
+    done:bool
+    def __init__(self, cmd:dict={}, done:bool=False):
+        self.cmd = cmd
+        self.done = done
 
-    def __init__(self, messagenser: MessageHandler):
-        self.cmd = messagenser
+class Subject(threading.Thread):
+    _observers:list[object]
+    def __init__(self):
+        super().__init__()
+        self._observers = []
+        self._stop_event = threading.Event()
+        self._lock = threading.Lock()
 
     # 비동기로 callback
     @classmethod
     def add_observer(cls, o: object):
-        cls.observers.append(o)
+        cls._observers.append(o)
 
     @classmethod
-    def notifyall(self, m: any):
-        for o in self.observers:
-            o.update(m)
+    def notifyall(self, message: Message):
+        for o in self._observers:
+            o.update(message)
 
-    def start(self, callback: object, dir: Orient, orient: DirType = DirType.LEFT):
-        self.dir = dir
-        self.orient = orient
-        self.target_angle = self._get_target_angle(dir, orient)
+    def start(self, callback: object, **kwargs):
+        self._stop_event.clear()
         self.add_observer(callback)
-
-        global state
-        while state != State.ROTATE_STOP:
-            time.sleep(0.1)
-
-        state = State.ROTATE_START
-
-        threading(target=self.run).start()
+        self.start(**kwargs)
 
     def run(self):
-        while True:
+        ''''''
+        
+class MoveAction(Subject):
+    def __init__(self):
+        super().__init__()
+
+    def run(self):
+        while not self._stop_event.is_set():
+          with self._lock:                                
+            # 회전각 계산            
+
+            # self._rotate_angle(torque=0.15, sign=sign_)
+            pass
+
+          time.sleep(0.1)
+
+    # 수평상태
+    def adjust_body(self):
+        amend_theta = self._get_deviation_radian()
+
+        # 간격을 두어 보정한다.
+        # 잦은 조정에의한 좌우 흔들림 방지.
+        if abs(amend_theta) > 3 / 180 * math.pi:
+            self.node.print_log(
+                f"[{self.dir_data.cur} 위치보정] {self.dir_data} >> 보정 각:{amend_theta} / 기준:{3 / 180 * math.pi}"
+            )
+            self.node._send_message(title="수평보정", x=0.5, theta=amend_theta)
+            # self.amend_h_count = 0
+            return self.pos_data.cur == self.pos_data.old
+
+        # self.amend_h_count += 1
+        return False
+
+    # 각도를 입력받아, 진행방향과 벗어난 각도를 반환한다.
+    def _get_deviation_radian(self) -> tuple[float, str]:
+        # 유니티에서 로봇의 기본회전상태가 180 CCW상태, 즉 음의 값.
+        # 회전방향 수치를 양수로 정리한다.
+        # -0.1 => 6.23
+        _cur_angle = self.angular_data.cur % (math.pi * 2)
+        _cur_dir = self.dir_data.cur
+
+        if _cur_dir == Orient.X:
+            amend_theta = (
+                -_cur_angle if _cur_angle < math.pi / 2 else 2 * math.pi - _cur_angle
+            )
+
+        elif _cur_dir == Orient._X:
+            amend_theta = math.pi - _cur_angle
+
+        elif _cur_dir == Orient.Y:
+            # -180 ~ -270
+            # 차이량에 대해 음수면 바퀴가 우측방향으로 돌게된다. (우회전으로 보정)
+            amend_theta = math.pi / 2 - _cur_angle
+
+        elif _cur_dir == Orient._Y:
+            amend_theta = math.pi * 3 / 2 - _cur_angle
+
+        else:
+            amend_theta = 0.0
+
+        return amend_theta
+
+class RotateAction(Subject):
+    start_angle: float
+
+    def __init__(self):
+        super().__init__()
+
+    # def start(self, callback: object, dir: Orient, orient: DirType = DirType.LEFT):
+    #     self.dir = dir
+    #     self.orient = orient
+    #     self.target_angle = self._get_target_angle(dir, orient)
+    #     self.add_observer(callback)
+
+    #     global state
+    #     while state != State.ROTATE_STOP:
+    #         time.sleep(0.1)
+
+    #     state = State.ROTATE_START
+
+    #     threading(target=self.run).start()
+
+    def run(self):
+       global state
+       state = State.ROTATE_START
+
+       while not self._stop_event.is_set():
+          with self._lock:                          
             # 회전각 계산
             angle_diff = self._get_diff()
 
             # 회전완료 여부 체크
-            if abs(angle_diff) < 0.2:
-                global state
+            if abs(angle_diff) < 0.2:       
                 state = State.ROTATE_STOP
-                self.notifyall(angle_diff)
+                self.notifyall(Message(done=True))
                 break
 
             sign_ = math.copysign(1, angle_diff)
             self._rotate_angle(torque=0.15, sign=sign_)
 
-            time.sleep(0.1)
+          time.sleep(0.1)
 
     # 목표 각도 설정
     def _get_target_angle(self, orient: Orient, dir: DirType) -> float:
@@ -96,7 +178,8 @@ class RotationManger:
             return 2 * math.pi
 
     def _rotate_angle(self, torque: float, sign: int):
-        self.cmd(torque=torque, angle=1.35 * sign)
+        self.notifyall(message=dict(torque=torque, angle=1.35 * sign))
+        # self.cmd(torque=torque, angle=1.35 * sign)
 
     # 반환값이 양수면 반시계방향으로 보정해야함
     def _get_diff(self):
