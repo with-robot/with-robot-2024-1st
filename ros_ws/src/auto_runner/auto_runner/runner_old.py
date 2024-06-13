@@ -14,7 +14,7 @@ from collections import deque
 from nav_msgs.msg import OccupancyGrid
 from auto_runner.map_transform import occ_gridmap
 from auto_runner.mmr_sampling import find_farthest_coordinate
-from auto_runner.lib import car_drive, common, path_location, parts
+from auto_runner.lib import car_drive, common, path_location
 
 laser_scan: LaserScan = None
 grid_map: list[list[int]] = None
@@ -113,7 +113,7 @@ class AStartSearchNode(Node):
         # self.twist_msg.angular = Vector3(x=0.0, y=0.0, z=0.0)
         # self.pub_jetauto_car.publish(self.twist_msg)
 
-        self.robot_ctrl = car_drive.RobotController(self, common.Dir.X)
+        self.robot_ctrl = car_drive.RobotController(self, common.Orient.X)
         self.path_find = path_location.PathFinder(self, algorithm="a-start")
 
     def set_destpos(self, pos: tuple[int, int]) -> None:
@@ -209,7 +209,7 @@ class AStartSearchNode(Node):
 
         # 회전상태 체크
         if self.rotate_state:
-            test = self.is_rotating(input_msg.twist.angular)
+            test = self.on_rotating(input_msg.twist.angular)
             if test:
                 return
 
@@ -302,7 +302,7 @@ class AStartSearchNode(Node):
         self.dest_pos = find_farthest_coordinate(grid_map, pos)
 
     # 회전중이며 True 반환.
-    def is_rotating(self, angular: object) -> bool:
+    def on_rotating(self, angular: object) -> bool:
         TARGET_ANGLE = math.pi / 2
 
         def __angle_diff(angle1, angle2):
@@ -320,7 +320,7 @@ class AStartSearchNode(Node):
 
         if TARGET_ANGLE * 0.8 < rotation_angle:
             break_torque = self.get_break_torque(rotation_angle, TARGET_ANGLE)
-            self.send_breakmsg("is_rotating", break_torque)
+            self.send_breakmsg("on_rotating", break_torque)
 
             self.get_logger().info(
                 f"angular_diff: {rotation_angle} / {rotation_angle < TARGET_ANGLE * 0.92}"
