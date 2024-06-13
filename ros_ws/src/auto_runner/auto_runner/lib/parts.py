@@ -1,4 +1,5 @@
 from enum import Enum, auto
+from abc import abstractmethod, ABCMeta
 from typing import TypeVar, Sequence
 from auto_runner.lib.common import StateData, MessageHandler, State, Orient, DirType
 from auto_runner.lib.map import Map
@@ -7,8 +8,7 @@ from auto_runner.lib.car_drive import RobotController
 import math
 import threading
 import time
-import asyncio
-
+from watchdog.observers import Observer
 
 state: State = State.ROTATE_STOP
 
@@ -19,31 +19,119 @@ class PolicyType(Enum):
     BACk = auto()
 
 
-class SensorData:
-    tf_sensor: any
-    lidar: any
+class MapPosData:
+    map: list[list[int]]
+    pos: list[list[tuple[float, float]]]
 
     @classmethod
-    def update_data(cls, tf_data: object, scan_data: any):
-        cls.tf_sensor = tf_data
-        cls.lidar = scan_data
+    def update_map(cls, map_data: list):
+        cls.map = map_data
+
+    @classmethod
+    def update_pos(cls, pos_data: list):
+        cls.pos = pos_data
 
 
-class MoveManager:
-    def __init__(self, messagenser: MessageHandler):
-        self.cmd = messagenser
+class SensorData:
+    tf_sensor: tuple[float, float]
+    lidar: list[float]
 
+    @classmethod
+    def update_lidar(cls, lidar: object):
+        cls.lidar = lidar
+
+    @classmethod
+    def update_tf(cls, tf_data: object):
+        cls.tf_sensor = (
+            tf_data.twist.linear.x,
+            tf_data.twist.linear.y,
+            tf_data.twist.angular.z,
+        )
+
+
+class Message:
+    cmd: dict
+    done: bool
+
+    def __init__(self, cmd: dict = {}, done: bool = False):
+        self.cmd = cmd
+        self.done = done
+
+
+class Observer:
+    def update(self, message: Message):
+        """"""
+
+
+class Subject(ABCMeta, threading.Thread):
+    _observers: list[Observer]
+
+    def __init__(self, stop_event: threading.Event):
+        super().__init__()
+        self._observers = []
+        self._stop_event = stop_event
+        self._lock = threading.Lock()
+
+    # 비동기로 callback
+    @classmethod
+    def add_observer(cls, o: Observer):
+        cls._observers.append(o)
+
+    @classmethod
+    def notifyall(cls, message: Message):
+        for o in cls._observers:
+            o.update(message)
+
+    def go(self, callback: object, **kwargs):
+        self._stop_event.clear()
+        self.add_observer(callback)
+        self._start(**kwargs)
+
+    @abstractmethod
+    def _start(self, **kwargs):
+        """"""
+
+
+class MoveAction(Subject):
+    def __init__(self):
+        super().__init__()
+
+    def _start(self, **kwargs):
+        # 좌표변환 기능 tf -> (x,y)
+        self.dest_pos = kwargs.get("dest_pos", (0, 0))
+        # self.pos_data: StateData = StateData()
+        #
+
+    def run(self):
+        if state != State.ROTATE_STOP:
+            self._stop_event.set()
+            time.sleep(0.3)
+            self._stop_event.clear()
+
+        while not self._stop_event.is_set():
+            with self._lock:
+                # 도착 여부 체크
+                cur_xy = SensorData.tf_sensor.linear.x, SensorData.tf_sensor.linear.y
+                if PathFinder._transfer2_xy(cur_xy) == self.dest_pos:
+                    self.notifyall(Message(done=True))
+                    break
+
+                self._move(torque=0.15, direction="sign_")
+
+            time.sleep(0.1)
+
+        self.notifyall(Message(done=True))
+        state = State.ROTATE_STOP
+
+    def _move(self, torque: float, direction: str):
+        # 전진
+        self.notifyall(Message(cmd={"torque": torque, "direction": direction}))
+        # if sign == 'sign_':
+        #     RobotController.move_forward(torque=torque)
+
+    # 수평상태
     def adjust_body(self):
         amend_theta = self._get_deviation_radian()
-        # 각도가 매우 틀어진 경우, 몸체의 방향을 변경한다.
-        # if math.fabs(amend_theta) > 0.6:
-        #     dir_ = self._calc_dir()
-        #     self.dir_data.shift(dir_)
-
-        #     self.node.print_log(
-        #         f"[방향 변경] amend_theta:{amend_theta}: {self.dir_data.old} => {self.dir_data.cur}"
-        #     )
-        #     return True
 
         # 간격을 두어 보정한다.
         # 잦은 조정에의한 좌우 흔들림 방지.
@@ -88,53 +176,49 @@ class MoveManager:
         return amend_theta
 
 
-class RotationManger:
-    observers: list[object]
+class RotateAction(Subject):
     start_angle: float
 
-    def __init__(self, messagenser: MessageHandler):
-        self.cmd = messagenser
+    def __init__(self):
+        super().__init__()
 
-    # 비동기로 callback
-    @classmethod
-    def add_observer(cls, o: object):
-        cls.observers.append(o)
+    # def start(self, callback: object, dir: Orient, orient: DirType = DirType.LEFT):
+    #     self.dir = dir
+    #     self.orient = orient
+    #     self.target_angle = self._get_target_angle(dir, orient)
+    #     self.add_observer(callback)
 
-    @classmethod
-    def notifyall(self, m: any):
-        for o in self.observers:
-            o.update(m)
+    #     global state
+    #     while state != State.ROTATE_STOP:
+    #         time.sleep(0.1)
 
-    def start(self, callback: object, dir: Orient, orient: DirType = DirType.LEFT):
-        self.dir = dir
-        self.orient = orient
-        self.target_angle = self._get_target_angle(dir, orient)
-        self.add_observer(callback)
+    #     state = State.ROTATE_START
 
-        global state
-        while state != State.ROTATE_STOP:
-            time.sleep(0.1)
-
-        state = State.ROTATE_START
-
-        threading(target=self.run).start()
+    #     threading(target=self.run).start()
 
     def run(self):
-        while True:
-            # 회전각 계산
-            angle_diff = self._get_diff()
+        if state != State.ROTATE_STOP:
+            return
 
-            # 회전완료 여부 체크
-            if abs(angle_diff) < 0.2:
-                global state
-                state = State.ROTATE_STOP
-                self.notifyall(angle_diff)
-                break
+        global state
+        state = State.ROTATE_START
 
-            sign_ = math.copysign(1, angle_diff)
-            self._rotate_angle(torque=0.15, sign=sign_)
+        while not self._stop_event.is_set():
+            with self._lock:
+                # 회전각 계산
+                angle_diff = self._get_diff()
+
+                # 회전완료 여부 체크
+                if abs(angle_diff) < 0.2:
+                    break
+
+                sign_ = math.copysign(1, angle_diff)
+                self._rotate_angle(torque=0.15, direction=sign_)
 
             time.sleep(0.1)
+
+        self.notifyall(Message(done=True))
+        state = State.ROTATE_STOP
 
     # 목표 각도 설정
     def _get_target_angle(self, orient: Orient, dir: DirType) -> float:
@@ -153,8 +237,8 @@ class RotationManger:
         else:
             return 2 * math.pi
 
-    def _rotate_angle(self, torque: float, sign: int):
-        self.cmd(torque=torque, angle=1.35 * sign)
+    def _rotate_angle(self, torque: float, direction: int):
+        self.notifyall(message=dict(torque=torque, angle=1.35 * direction))
 
     # 반환값이 양수면 반시계방향으로 보정해야함
     def _get_diff(self):
@@ -189,12 +273,12 @@ class Policy:
         }
 
         self.policy_plan = _action_map.get(policy)
-        self.rotate_manager = RotationManger(self.rcntrler.cmd)
-        self.move_manager = MoveManager(self.rcntrler.cmd)
+        self.rotate_manager = RotateAction(self.rcntrler.cmd)
+        self.move_manager = MoveAction(self.rcntrler.cmd)
 
     def apply(self, **kwargs):
         # 3. 단기 목표설정 TODO:
-        self.policy_plan(dir=kwargs.get('dir'), orient=kwargs.get('orient'))
+        self.policy_plan(dir=kwargs.get("dir"), orient=kwargs.get("orient"))
         self.apply_kwargs = kwargs
 
     def report(self):
@@ -229,11 +313,7 @@ class RobotContler:
 
             # 경로와 방향을 정한다.
             policy: Policy = self._policy(dest_pos)
-            kwargs = {
-                'callback':self.callback_func,
-                'dir':'',
-                'orient':''
-            }
+            kwargs = {"callback": self.callback_func, "dir": "", "orient": ""}
             policy.apply(**kwargs)
 
             return policy.report()
@@ -246,12 +326,13 @@ class RobotContler:
                 return
 
     def _policy(self, dest_pos: tuple) -> PolicyType:
-        
+
         def __check_rotate_policy(self, path: list[tuple]) -> bool:
             if self.path[0] == path[1]:
                 return False
             else:
                 return True
+
         # 가야 할 전략
         _policy: PolicyType = None
 
@@ -278,7 +359,7 @@ class RobotContler:
         if self.pathfinder.cur_pos == dest_pos:
             self.notifyall(dest_pos)
             raise Exception("arrived")
-    
+
     def callback_func(self, **kwargs):
         print(kwargs)
 

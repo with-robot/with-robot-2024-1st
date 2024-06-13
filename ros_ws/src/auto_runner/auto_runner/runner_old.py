@@ -14,7 +14,7 @@ from collections import deque
 from nav_msgs.msg import OccupancyGrid
 from auto_runner.map_transform import occ_gridmap
 from auto_runner.mmr_sampling import find_farthest_coordinate
-from auto_runner.lib import car_drive, common, path_location
+from auto_runner.lib import car_drive, common, path_location, parts
 
 laser_scan: LaserScan = None
 grid_map: list[list[int]] = None
@@ -61,7 +61,6 @@ class LidarScanNode(Node):
     def scan_handler(self, msg: LaserScan):
         global laser_scan
         laser_scan = msg
-
 
 class AStartSearchNode(Node):
 
