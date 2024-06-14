@@ -1,13 +1,23 @@
 from enum import Enum, auto
-from abc import abstractmethod, ABCMeta
 from typing import TypeVar, Sequence
-from auto_runner.lib.common import StateData, MessageHandler, State, Orient, DirType
+from auto_runner.lib.common import (
+    EvHandle,
+    StateData,
+    MessageHandler,
+    State,
+    Orient,
+    DirType,
+    Observable,
+    Message,
+    Observer,
+    threading,
+)
 from auto_runner.lib.map import Map
 from auto_runner.lib.path_location import PathFinder
 import math
-import threading
 import time
 
+stop_event = TypeVar("stop_event", bound=threading.Event)
 state: State = State.ROTATE_STOP
 
 
@@ -17,20 +27,22 @@ class PolicyType(Enum):
     BACk = auto()
 
 
-class MapPosData:
+class MapPosData(Observable):
     map: list[list[int]]
     pos: list[list[tuple[float, float]]]
 
     @classmethod
     def update_map(cls, map_data: list):
         cls.map = map_data
+        cls.notifyall("map", Message(data=map_data))
 
     @classmethod
     def update_pos(cls, pos_data: list):
         cls.pos = pos_data
+        cls.notifyall("pos", Message(data=pos_data))
 
 
-class SensorData:
+class SensorData(Observable):
     tf_sensor: list[float, float, float]
     lidar: list[float]
 
@@ -47,67 +59,22 @@ class SensorData:
         ]
 
 
-class Message:
-    cmd: dict
-    done: bool
+class MoveAction(EvHandle, Observer):
+    def __init__(self, stop_event: stop_event):
+        super().__init__(stop_event)
+        MapPosData.add_observer(subject="pos", o=self)
 
-    def __init__(self, cmd: dict = {}, done: bool = False):
-        self.cmd = cmd
-        self.done = done
-
-
-class Observer:
-    def update(self, message: Message):
-        """"""
-
-
-class Observable(ABCMeta):
-    _observe_map: dict[str, list[Observer]]
-
-    def __new__(cls):
-        cls._observe_map = {}
-
-    # 비동기로 callback
-    @classmethod
-    def add_observer(cls, n: str, o: Observer):
-        cls._observe_map.get(n, []).append(o)
-
-    @classmethod
-    def notifyall(cls, n: str, message: Message):
-        for o in cls._observe_map.get(n, []):
-            o.update(message)
-
-
-class EvHandle(ABCMeta, threading.Thread):
-    _lock = threading.Lock()
-
-    def __init__(self, stop_event: threading.Event):
-        super().__init__()
-        self._stop_event = stop_event
-
-    def add(self, callback: object, **kwargs):
-        self._stop_event.clear()
-        Observable.add_observer(self.__class__, callback)
-        self._start(**kwargs)
-
-    @abstractmethod
-    def _start(self, **kwargs):
-        """"""
-
-
-class MoveAction(EvHandle):
-    def __init__(self):
-        super().__init__()
-
-    def _start(self, **kwargs):
+    def _init(self, **kwargs):
         # 좌표변환 기능 tf -> (x,y)
         self.dest_pos = kwargs.get("dest_pos", (0, 0))
         self.orient = kwargs.get("orient", Orient.X)
-        self.direction = 1 if kwargs.get("direction", DirType.St"forward") == "forward" else -1
-        # self.pos_data: StateData = StateData()
+        self.direction = (
+            1 if kwargs.get("direction", DirType.FORWARD) == "forward" else -1
+        )
 
     def run(self):
         if state != State.ROTATE_STOP:
+            # 회전중이라면 회전을 중지시킨다.
             self._stop_event.set()
             time.sleep(0.3)
             self._stop_event.clear()
@@ -119,18 +86,18 @@ class MoveAction(EvHandle):
                 # 도착 여부 체크
                 if PathFinder._transfer2_xy(SensorData.tf_sensor[:2]) == self.dest_pos:
                     break
-                
-                amend_theta:float = self._adjust_body()
-                self._move(torque=0.15 * self.direction, theta = amend_theta)
+
+                amend_theta: float = self._adjust_body()
+                self._move(torque=0.15 * self.direction, theta=amend_theta)
 
             time.sleep(0.1)
 
-        Observable.notifyall(__class__, Message(done=True))
+        Observable.notifyall("operate", Message(done=True))
         state = State.STOP
 
     def _move(self, torque: float, theta: float):
         # 전진
-        Observable.notifyall(__class__, Message(cmd={"torque": torque, "theta": theta}))
+        Observable.notifyall("operate", Message(cmd=dict(torque=torque, theta=theta)))
 
     # 수평상태
     def _adjust_body(self):
@@ -144,9 +111,12 @@ class MoveAction(EvHandle):
             # )
             pass
         else:
-            amend_theta =0
+            amend_theta = 0
 
         return amend_theta
+    # x,y,angle.z
+    def update(self, message: list[float, float, float]):
+        self.tf_data = message
 
     # 각도를 입력받아, 진행방향과 벗어난 각도를 반환한다.
     def _get_deviation_radian(self) -> tuple[float, str]:
@@ -180,25 +150,21 @@ class MoveAction(EvHandle):
         return amend_theta
 
 
-class RotateAction(EvHandle):
+class RotateAction(EvHandle, Observer):
     start_angle: float
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, stop_event: stop_event):
+        super().__init__(stop_event)
+        MapPosData.add_observer(subject="pos", o=self)
 
-    # def start(self, callback: object, dir: Orient, orient: DirType = DirType.LEFT):
-    #     self.dir = dir
-    #     self.orient = orient
-    #     self.target_angle = self._get_target_angle(dir, orient)
-    #     self.add_observer(callback)
-
-    #     global state
-    #     while state != State.ROTATE_STOP:
-    #         time.sleep(0.1)
-
-    #     state = State.ROTATE_START
-
-    #     threading(target=self.run).start()
+    def _init(self, **kwargs):
+        # 좌표변환 기능 tf -> (x,y)
+        self.dir = kwargs.get("dir", (0, 0))
+        self.orient = kwargs.get("orient", Orient.X)
+        self.target_angle = kwargs.get("target_angle", 0)
+        self.direction = (
+            1 if kwargs.get("direction", DirType.FORWARD) == "forward" else -1
+        )
 
     def run(self):
         if state != State.ROTATE_STOP:
@@ -221,7 +187,7 @@ class RotateAction(EvHandle):
 
             time.sleep(0.1)
 
-        self.notifyall(Message(done=True))
+        Observable.notifyall("operate", Message(done=True))
         state = State.ROTATE_STOP
 
     # 목표 각도 설정
@@ -242,7 +208,7 @@ class RotateAction(EvHandle):
             return 2 * math.pi
 
     def _rotate_angle(self, torque: float, direction: int):
-        self.notifyall(message=dict(torque=torque, angle=1.35 * direction))
+        self.notifyall("operate", Message(cmd=dict(torque=torque, theta=1.35 * direction)))
 
     # 반환값이 양수면 반시계방향으로 보정해야함
     def _get_diff(self):
@@ -251,6 +217,9 @@ class RotateAction(EvHandle):
             cur_angle if cur_angle > self.target_angle else (cur_angle + 2 * math.pi)
         )
         return self.target_angle - cur_angle
+    # x,y,angle.z
+    def update(self, message: list[float, float, float]):
+        self.tf_data = message
 
 
 class PolicyResult:

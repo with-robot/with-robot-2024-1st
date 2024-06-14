@@ -1,6 +1,8 @@
+from abc import ABCMeta, abstractmethod
+from dataclasses import dataclass
 from enum import Enum, auto
 from typing import TypeVar, Sequence
-
+import threading
 class Orient(Enum):
     X = "x"
     _X = "-x"
@@ -52,3 +54,54 @@ class StateData:
     
     def __repr__(self) -> str:
         return f"[cur:{self.cur}, old:{self.old}]"    
+    
+
+@dataclass(slots=True, kw_only=True)
+class Message:
+    cmd: dict
+    data: any
+    done: bool
+
+
+class Observer(ABCMeta):
+    @abstractmethod
+    def update(self, message: Message):
+        """"""
+
+
+
+class Observable(ABCMeta):
+    _observe_map: dict[str, list[Observer]]
+
+    def __new__(cls):
+        cls._observe_map = {}
+
+    # 비동기로 callback
+    @classmethod
+    def add_observer(cls, subject: str, o: Observer):
+        cls._observe_map.get(subject, []).append(o)
+
+    @classmethod
+    def notifyall(cls, subject: str, message: Message):
+        for o in cls._observe_map.get(subject, []):
+            o.update(message)
+
+
+class EvHandle(ABCMeta, threading.Thread):
+    _lock = threading.Lock()
+
+    def __init__(self, stop_event: threading.Event):
+        super().__init__()
+        self._stop_event = stop_event
+
+    def add(self, callback: object, **kwargs):
+        self._stop_event.clear()
+        Observable.add_observer(self.__class__, callback)
+        self._init(**kwargs)
+        # thread 개시
+        self.start()
+
+    @abstractmethod
+    def _init(self, **kwargs):
+        """"""
+
