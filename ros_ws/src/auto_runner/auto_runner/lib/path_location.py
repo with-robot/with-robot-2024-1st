@@ -116,7 +116,7 @@ class PathFinder:
         return self.paths[1]
 
     # 위치값을 맵좌표로 변환
-    def _transfer2_xy(self, pose: tuple[float, float]) -> tuple[int, int]:
+    def _transfer2_xy(self, pose: Sequence[float, float]) -> tuple[int, int]:
         # PC 맵 좌표를 SLAM 맵 좌표로 변환
         _x = math.floor(5.0 + pose[0])  # x
         _y = math.floor(5.0 + pose[1])  # y

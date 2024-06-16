@@ -1,6 +1,8 @@
 import math
-from auto_runner.lib.common import Orient, State, MessageHandler, TypeVar, StateData, DirType
+from auto_runner.lib.common import *
+from auto_runner.lib.parts import *
 from auto_runner.lib.path_location import PathFinder
+from rclpy.node import Node
 
 LoggableNode = TypeVar("LoggableNode", bound=MessageHandler)
 
@@ -22,17 +24,14 @@ class RobotController:
     pos_data: StateData
     state_data: StateData
 
-    def __init__(
-        self, node: LoggableNode, path_finder: PathFinder, dir: Orient = Orient.X
-    ) -> None:
+    def __init__(self, node: LoggableNode, dir: Orient = Orient.X) -> None:
         self.node = node
-        self.path_finder = path_finder
         self.dir_data = StateData(dir, dir)
+        self.path_finder = PathFinder(algorithm="a-start", dest_pos=(0, 2))
         self.angular_data = StateData(0.0, 0.0)
         self.pos_data = StateData((0, 0), (0, 0))
         self.state_data = StateData(State.ROTATE_STOP, State.ROTATE_STOP)
         self.amend_h_count = 0
-        self.__t_diff = None
 
     # tf데이터 수신
     def update_pos(self, twistStamped: object):
@@ -124,23 +123,27 @@ class RobotController:
         cond2: bool = self.state_data.cur in [State.ROTATE_START, State.ROTATE_READY]
         return cond2
 
+    def break_if_rotating(self):
+        if self.is_rotate_state():
+            self.node._send_message(title="회전전 감속", x=-self.fwd_torque * 1.2)
+
     # 막다른 골목위치 체크
     def check_obstacle(self):
         # 후진모드설정
         pass
-    
-    def check_straight_state(self) -> bool:
-        if self.is_rotate_state():
-            # 회전이 끝난다음 직진 상태인지 체크
-            return False
 
-        self.node.print_log(
-            f"<<on_straight>> dir_data: {self.dir_data}, angular_data: {self.angular_data}"
-        )
+    # def check_straight_state(self) -> bool:
+    #     if self.is_rotate_state():
+    #         # 회전이 끝난다음 직진 상태인지 체크
+    #         return False
 
-        # 직진 상태인지 체크
-        return self.pos_data.cur == self.path_finder.get_next_pos()
-    
+    #     self.node.print_log(
+    #         f"<<on_straight>> dir_data: {self.dir_data}, angular_data: {self.angular_data}"
+    #     )
+
+    #     # 직진 상태인지 체크
+    #     return self.pos_data.cur == self.path_finder.get_next_pos()
+
     # 회전이 종료되면 True반환
     def check_rotate_state(self) -> bool:
 
@@ -152,38 +155,49 @@ class RobotController:
         )
 
         def __angle_diff(cur, old):
-            old %= (2*math.pi)
+            old %= 2 * math.pi
             diff = math.fabs(cur - old)
             return diff if diff < math.pi * 3 / 2 else 2 * math.pi - diff
 
         # __t_diff = __angle_diff(self.angular_data.cur, self.angular_data.old)
         orient = self.dir_data.old
-        dir = DirType.LEFT if math.copysign(1, self.torq_ang[1]) >0 else DirType.RIGHT
-        __t_diff = __angle_diff(self._get_target_angle(orient, dir), self.angular_data.cur)
-        
+        dir = DirType.LEFT if math.copysign(1, self.torq_ang[1]) > 0 else DirType.RIGHT
+        __t_diff = __angle_diff(
+            self._get_target_angle(orient, dir), self.angular_data.cur
+        )
+
         self.node.print_log(f"angular_diff: {__t_diff}, cur_stat:{self.state_data.cur}")
 
-        if __t_diff < 0.2 and self.state_data.cur==State.ROTATE_START:
+        if __t_diff < 0.2 and self.state_data.cur == State.ROTATE_START:
             self.state_data.shift(State.ROTATE_STOP)
-            self.node._send_message(title="회전토크 0.01", x=0.01, theta=self.torq_ang[1])
+            self.node._send_message(
+                title="회전토크 0.01", x=0.01, theta=self.torq_ang[1]
+            )
             return False
         else:
             if __t_diff >= 0.2:
                 self.state_data.cur = State.ROTATE_START
-            self.node._send_message(title="회전토크 0.15", x=0.15, theta=self.torq_ang[1])
+            self.node._send_message(
+                title="회전토크 0.15", x=0.15, theta=self.torq_ang[1]
+            )
             return True
-        
-    
+
     # 목표 각도 설정
     def _get_target_angle(self, orient: Orient, dir: DirType) -> float:
-        if (orient==Orient.X and dir==DirType.LEFT) or (orient==Orient._X and dir==DirType.RIGHT):
-            return math.pi/2
-        elif (orient==Orient.Y and dir==DirType.LEFT) or (orient==Orient._Y and dir==DirType.RIGHT):
+        if (orient == Orient.X and dir == DirType.LEFT) or (
+            orient == Orient._X and dir == DirType.RIGHT
+        ):
+            return math.pi / 2
+        elif (orient == Orient.Y and dir == DirType.LEFT) or (
+            orient == Orient._Y and dir == DirType.RIGHT
+        ):
             return math.pi
-        elif (orient==Orient.X and dir==DirType.RIGHT) or (orient==Orient._Y and dir==DirType.LEFT):
-            return 3*math.pi/2
+        elif (orient == Orient.X and dir == DirType.RIGHT) or (
+            orient == Orient._Y and dir == DirType.LEFT
+        ):
+            return 3 * math.pi / 2
         else:
-            return 2*math.pi
+            return 2 * math.pi
 
     # PID 제어
     def _get_break_torque(
@@ -287,3 +301,158 @@ class RobotController:
     # 차랑을 정지시키다.
     def stop_car(self):
         self.node.print_log("<<stop_car>>")
+
+
+class RobotController2:
+    def __init__(self, node:Node):
+        # 맵을 가진다.
+        self.node = node
+        self.pathfinder = PathFinder(algorithm="a-star", dest_pos=(0, 0))
+
+    def excute(self, next_plan: any) -> PolicyResult:
+        import threading
+
+        def __monitor(message):
+            # 전략에 대해 도착위치에 목표를 주고 모니터링한다.
+            print(message)
+
+        try:
+            route_policies: list[Policy] = self._route_planning(final_pos=dest_pos)
+            for policy in route_policies:
+                # 경로이탈 시 예외발생토록 함.
+                kwargs = {}
+                policy.apply(**kwargs)
+
+            # 마지막 전략에 대한 도착위치에서 주행계획 반복.
+
+            return policy.report()
+
+        except Exception as e:
+            print(e)
+            if e == "arrived":
+                return
+            elif e == "no policy":
+                return
+
+    def _route_planning(self):
+        import threading
+
+        stop_event = threading.Event()
+        # 주행 계획
+        # 전략의 순서와 전략별 도착위치를 구성한다.
+        move_plan = [
+            Policy(PolicyType.BACk, stop_event=stop_event, orient=(5, 0)),
+            Policy(PolicyType.ROTATE, stop_event=stop_event, dir=DirType.LEFT),
+        ]
+
+        return move_plan
+
+    def make_plan(self, final_dest_pos: tuple[int, int], orient: Orient) -> Policy:
+        '''후진, 회전, 직진여부를 체크하고 해당 policy를 반환한다'''
+
+        _policy = {}
+        
+        def __need_rotate(self, path: list[tuple]) -> bool:
+            x1, y1 = self.path[0]
+            x2, y2 = path[1]
+            if (
+                (orient.X or orient._X)
+                and y1 != y2
+                or (orient.Y or orient._Y)
+                and x1 != x2
+            ):
+                return True
+            else:
+                return False
+
+        # 가야 할 전략
+        _policy: PolicyType = None
+
+        # 1. 후진 계획
+        if self.pathfinder.is_intrap():
+            self.pathfinder.back_path()
+            _policy['type'] = PolicyType.BACk
+            # _policy = Policy(PolicyType.BACk)
+        else:
+
+            # 2. 전진 계획
+            _path = self.pathfinder.find_path(final_dest_pos)
+            dest_pos, orient = _path
+
+            if __need_rotate(_path):
+                _policy['type'] = PolicyType.ROTATE
+                _policy['dir'] = DirType.LEFT
+                
+            else:
+                _policy['type'] = PolicyType.STRAIGHT
+                _policy['dest_pos'] = PolicyType.BACk
+            
+        return _policy
+
+    def next_action(self, dir:DirType, next_pos:tuple) -> tuple[float, float]:
+        cur_pos = self.path_finder.cur_pos
+
+        next_pos = self.path_finder.check_and_dest(self.dir_data.cur)
+
+        self.node.print_log(f"next_pose: {cur_pos} => {next_pos}")
+
+        LEFT_TURN = (self.rotate_torque, self.rot_angle_ccw)
+        RIGHT_TURN = (self.rotate_torque, -self.rot_angle_ccw)
+        MOVE_FWD = (self.fwd_torque, 0.0)
+        # MOVE_BWD = (-self.fwd_torque, 0.0)
+        x0, y0 = cur_pos
+        x1, y1 = next_pos
+
+        _next_dir = _cur_dir = self.dir_data.cur
+
+        _torq_ang = MOVE_FWD  # 직진
+        _next_dir = self.dir_data.cur
+        if _cur_dir == Orient.X:
+            if y1 > y0:
+                _torq_ang, _next_dir = LEFT_TURN, Orient.Y  # 좌회전
+            elif y1 < y0:
+                _torq_ang, _next_dir = RIGHT_TURN, Orient._Y  # 우회전
+
+        elif _cur_dir == Orient._X:
+            if y1 > y0:
+                _torq_ang, _next_dir = RIGHT_TURN, Orient.Y  # 우회전
+            elif y1 < y0:
+                _torq_ang, _next_dir = LEFT_TURN, Orient._Y  # 좌회전
+
+        elif _cur_dir == Orient.Y:
+            if x1 > x0:
+                _torq_ang, _next_dir = RIGHT_TURN, Orient.X  # 우회전
+            elif x1 < x0:
+                _torq_ang, _next_dir = LEFT_TURN, Orient._X  # 좌회전
+
+        elif _cur_dir == Orient._Y:
+            if x1 > x0:
+                _torq_ang, _next_dir = LEFT_TURN, Orient.X  # 좌회전
+            elif x1 < x0:
+                _torq_ang, _next_dir = RIGHT_TURN, Orient._X  # 우회전
+
+        if _torq_ang[1] != 0.0:
+            self.state_data.shift(State.ROTATE_READY)
+
+        # 방향 및 목적위치
+        self.dir_data.shift(_next_dir)
+
+        self.angular_data.old = self.angular_data.cur
+        self.pos_data.old = self.pos_data.cur
+        self.torq_ang = _torq_ang
+
+        self.node.print_log(
+            f"{self.dir_data}\n{self.state_data}\n{self.pos_data}\n{self.angular_data}"
+        )
+        return _torq_ang
+
+    # 회전상태 여부
+
+    def check_arrived(self, dest_pos: tuple):
+        if self.pathfinder.cur_pos == dest_pos:
+            self.notifyall(dest_pos)
+            raise Exception("arrived")
+
+    def notifyall(self, m: any):
+        for o in self.observers:
+            o.update(m)

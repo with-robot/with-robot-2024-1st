@@ -11,6 +11,8 @@ from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid
 from auto_runner.map_transform import convert_map
 from auto_runner.lib import car_drive, common, path_location, parts
+from auto_runner.lib.car_drive import RobotController2
+from auto_runner.lib.common import Message, Observable
 
 laser_scan: LaserScan = None
 grid_map: list[list[int]] = None
@@ -86,10 +88,12 @@ class AStartSearchNode(Node):
         self.get_logger().info(f"AStartpath_searchNode started...")
         self.setup()
 
-        _path_finder = path_location.PathFinder(
-            self, algorithm="a-start", dest_pos=(0, 2)
-        )
-        self.robot_ctrl = car_drive.RobotController(self, _path_finder, common.Orient.X)
+        self.robot_ctrl = RobotController2()
+
+        # _path_finder = path_location.PathFinder(
+        #     self, algorithm="a-start", dest_pos=(0, 2)
+        # )
+        # self.robot_ctrl = car_drive.RobotController(self, _path_finder, common.Orient.X)
 
         self.get_logger().info(f"AStart_Path_Search_Mode has started...")
 
@@ -97,44 +101,23 @@ class AStartSearchNode(Node):
         self, loc_data: TwistStamped
     ) -> None:  # msg로부터 위치정보를 추출
         
-        parts.SensorData.update_tf(loc_data)
+        parts.IMUData.update(data=loc_data)
         if not grid_map:
             return
+        
+        # 계획완료를 확인한다.
+        if not self.act_complete:
+            # 경로이탈여부를 확인한다.
 
-        # 맵,위치데이터 수신
-        self.robot_ctrl.update_map(grid_map)
-        self.robot_ctrl.update_pos(loc_data)
-
-        if self.robot_ctrl.check_arrival(finish=False):
             return
+        
+        # 실행결과를 검증한다.
 
-        is_near = self._is_near()
-        if is_near:
-            # 급 감속
-            action = self.state_near
-            self._send_message(title="근접 후진", x=action[0], theta=action[1])
-            return
-
-        if self.robot_ctrl.check_rotate_state():
-            return
-
-        # 방향 보정
-        if self.robot_ctrl.adjust_body():
-            return
-
-        # 로봇 다음동작
-        try:
-            x, theta = self.robot_ctrl.next_action()
-        except Exception as e:
-            self.get_logger().info(f"controller stopped:{e}")
-            # 맵 생성까지 대기
-            return
-
-        if self.robot_ctrl.is_rotate_state():
-            self._send_message(title="회전전 감속", x=-0.8)
-
-        # 제어메시지 발행
-        self._send_message(title="주행지시", x=x, theta=theta)
+        # 로봇 이동계획을 수립한다.
+        action_plan = self.robot_ctrl.make_plan()
+        
+        # 로봇에 계획을 전달한다.
+        self.robot_ctrl.excute(action_plan)
 
     # 로봇이 전방물체와 50cm이내 접근상태이면 True를 반환
     def _is_near(self) -> tuple[bool, tuple]:
@@ -187,6 +170,8 @@ class AStartSearchNode(Node):
 
     def setup(self) -> None:
         self.nanoseconds = 0
+        Observable.add_observer('node', o=self)
+        self.dest_pos = (0, 0)
         self.get_logger().info("초기화 처리 완료")
 
     def send_command(self, request, response) -> None:
@@ -215,7 +200,14 @@ class AStartSearchNode(Node):
 
     def print_log(self, message) -> None:
         self.get_logger().info(message)
-
+    
+    def update(self, message: Message):
+        if message.data_type == "command":
+            self._send_message(
+                title=message.data.get('name'), x=message.data['torque'], theta=message.data['theta'])            
+        elif message.data_type == "notify":
+            self.act_complete = True
+            self.print_log(message.data+' completed')
 
 def main(args=None):
     rclpy.init(args=args)

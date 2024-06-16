@@ -82,13 +82,9 @@ class AStartSearchNode(Node):
             CmdMsg, "jetauto_car/cmd_msg", self.send_command
         )
 
-        self.get_logger().info(f"AStartpath_searchNode started...")
+        self.robot_ctrl = car_drive.RobotController(node=self, dir=common.Orient.X)
+        
         self.setup()
-
-        _path_finder = path_location.PathFinder(
-            self, algorithm="a-start", dest_pos=(0, 2)
-        )
-        self.robot_ctrl = car_drive.RobotController(self, _path_finder, common.Orient.X)
 
         self.get_logger().info(f"AStart_Path_Search_Mode has started...")
 
@@ -127,8 +123,7 @@ class AStartSearchNode(Node):
             # 맵 생성까지 대기
             return
 
-        if self.robot_ctrl.is_rotate_state():
-            self._send_message(title="회전전 감속", x=-0.8)
+        self.robot_ctrl.break_if_rotating()
 
         # 제어메시지 발행
         self._send_message(title="주행지시", x=x, theta=theta)

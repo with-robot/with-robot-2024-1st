@@ -1,26 +1,32 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import TypeVar, Sequence
 import threading
+import asyncio
+
 class Orient(Enum):
     X = "x"
     _X = "-x"
     Y = "y"
     _Y = "-y"
+
+
 class DirType(Enum):
     LEFT = auto()
     RIGHT = auto()
     FORWARD = auto()
     BACKWARD = auto()
-class State(Enum):    
+
+
+class State(Enum):
     ROTATE_READY = auto()
     ROTATE_START = auto()
     ROTATE_STOP = auto()
     RUN = auto()
-    STOP =auto()
+    STOP = auto()
 
-# Python에서는 프로토타입 기반의 객체 지향 프로그래밍을 직접적으로 지원하지 않지만, 
+
+# Python에서는 프로토타입 기반의 객체 지향 프로그래밍을 직접적으로 지원하지 않지만,
 # __getattr__ 메서드와 메타클래스를 활용하면 프로토타입 기반의 인터페이스를 구현할 수 있습니다. 다음과 같이 작성할 수 있습니다:
 # class InterfaceMeta(type):
 #     def __new__(cls, name, bases, attrs):
@@ -33,18 +39,22 @@ class State(Enum):
 #         return super().__new__(cls, name, bases, attrs)
 
 # class Interface(metaclass=InterfaceMeta):
-    # '''인터페이스정의 클래스'''
+# '''인터페이스정의 클래스'''
+
 
 class MessageHandler:
-    def print_log(self, message):'''로깅을 한다'''
-    def _send_message(self, **kwargs):'''로봇에 메시지를 전달한다'''
+    def print_log(self, message):
+        """로깅을 한다"""
+
+    def _send_message(self, **kwargs):
+        """로봇에 메시지를 전달한다"""
 
 
 class StateData:
     cur: any
     old: any
 
-    def __init__(self, cur:any, old:any):
+    def __init__(self, cur: any, old: any):
         self.cur = cur
         self.old = old
 
@@ -52,51 +62,65 @@ class StateData:
         self.old = self.cur
         self.cur = new_data
     
-    def __repr__(self) -> str:
-        return f"[cur:{self.cur}, old:{self.old}]"    
+    def __eq__(self, __o: object) -> bool:
+        return self.cur == __o
     
+    def __repr__(self) -> str:
+        return f"[cur:{self.cur}, old:{self.old}]"
+
 
 @dataclass(slots=True, kw_only=True)
 class Message:
-    cmd: dict
-    data: any
-    done: bool
+    title:str
+    data_type: str
+    data: dict | list | any
 
 
 class Observer(ABCMeta):
     @abstractmethod
-    def update(self, message: Message):
+    def update(self, data: any):
         """"""
 
 
-
-class Observable(ABCMeta):
-    _observe_map: dict[str, list[Observer]]
-
-    def __new__(cls):
-        cls._observe_map = {}
+class Observable:
+    _observe_map: dict[str, list[Observer]] = {}
+    _subject: str =""
 
     # 비동기로 callback
     @classmethod
-    def add_observer(cls, subject: str, o: Observer):
-        cls._observe_map.get(subject, []).append(o)
+    def add_observer(cls, o: Observer, subject: str = None):
+        """주제를 구독한다"""
+        subject = subject or cls._subject
+        if subject not in cls._observe_map:
+            cls._observe_map[subject] = []
+        cls._observe_map[subject].append(o)
 
     @classmethod
-    def notifyall(cls, subject: str, message: Message):
+    async def notifyall(cls, message: Message, subject: str = None):
+        """주제를 모든 구독자에게 전달한다."""
+        subject = subject or cls._subject
         for o in cls._observe_map.get(subject, []):
-            o.update(message)
+            if callable(o):
+                await o(message)
+            else:
+                await o.update(message)
 
+    @classmethod
+    async def update(cls, data: object):
+        await cls.notifyall(Message(data_type=cls._subject, data=data))
+
+    def dict(self):
+        return dict(name=self.name, callback=self.callback)
 
 class EvHandle(ABCMeta, threading.Thread):
     _lock = threading.Lock()
 
     def __init__(self, stop_event: threading.Event):
         super().__init__()
-        self._stop_event = stop_event
+        self.stop_event = stop_event
 
-    def add(self, callback: object, **kwargs):
-        self._stop_event.clear()
-        Observable.add_observer(self.__class__, callback)
+    def start_action(self, **kwargs):
+        self.stop_event.clear()
         self._init(**kwargs)
         # thread 개시
         self.start()
@@ -105,3 +129,14 @@ class EvHandle(ABCMeta, threading.Thread):
     def _init(self, **kwargs):
         """"""
 
+    def _notifyall(self, subject:str, message:Message):        
+        async def create_task():
+            task = asyncio.create_task(
+                Observable.notifyall(
+                    subject, message
+                )
+            )
+            await asyncio.sleep(0)
+            return task
+        
+        asyncio.get_event_loop().run_until_complete(create_task())
