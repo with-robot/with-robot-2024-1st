@@ -3,7 +3,9 @@ from dataclasses import dataclass
 from enum import Enum, auto
 import threading
 import asyncio
+from typing import TypeVar
 
+stop_event = TypeVar("stop_event", bound=threading.Event)
 class Orient(Enum):
     X = "x"
     _X = "-x"
@@ -75,6 +77,10 @@ class Message:
     data_type: str
     data: dict | list | any
 
+class Chainable(ABCMeta):
+    @abstractmethod
+    def check_condition(self, orient_state:StateData, cur_pos:tuple, paths:list[tuple]):
+        ''''''
 
 class Observer(ABCMeta):
     @abstractmethod
@@ -96,6 +102,13 @@ class Observable:
         cls._observe_map[subject].append(o)
 
     @classmethod
+    def remove_observer(cls, o: Observer, subject: str = None):
+        """주제 구독을 해제한다"""
+        subject = subject or cls._subject
+        if subject in cls._observe_map:
+            cls._observe_map[subject].remove(o)
+
+    @classmethod
     async def notifyall(cls, message: Message, subject: str = None):
         """주제를 모든 구독자에게 전달한다."""
         subject = subject or cls._subject
@@ -112,21 +125,21 @@ class Observable:
     def dict(self):
         return dict(name=self.name, callback=self.callback)
 
+
 class EvHandle(ABCMeta, threading.Thread):
     _lock = threading.Lock()
 
-    def __init__(self, stop_event: threading.Event):
+    def __init__(self):
         super().__init__()
-        self.stop_event = stop_event
 
-    def start_action(self, **kwargs):
-        self.stop_event.clear()
-        self._init(**kwargs)
+    def apply(self, **kwargs):
+        stop_event.clear()
+        self.setup(**kwargs)
         # thread 개시
         self.start()
 
     @abstractmethod
-    def _init(self, **kwargs):
+    def setup(self, **kwargs):
         """"""
 
     def _notifyall(self, subject:str, message:Message):        

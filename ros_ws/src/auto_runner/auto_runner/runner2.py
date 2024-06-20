@@ -10,8 +10,8 @@ from yolov8_msgs.srv import CmdMsg
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid
 from auto_runner.map_transform import convert_map
-from auto_runner.lib import car_drive, common, path_location, parts
-from auto_runner.lib.car_drive import RobotController2
+from auto_runner.lib.parts import *
+from auto_runner.lib.car_drive2 import RobotController2
 from auto_runner.lib.common import Message, Observable
 
 laser_scan: LaserScan = None
@@ -36,7 +36,7 @@ class GridMap(Node):
         global grid_map
         raw_data = np.array(map.data, dtype=np.int8)
         grid_map = convert_map(raw_data)
-        parts.MapPosData = grid_map
+        MapData.update(data = grid_map)
 
 
 class LidarScanNode(Node):
@@ -59,7 +59,7 @@ class LidarScanNode(Node):
     def scan_handler(self, msg: LaserScan):
         global laser_scan
         laser_scan = msg
-        parts.SensorData.update_lidar(msg)
+        LidarData.update_lidar(msg)
 
 
 class AStartSearchNode(Node):
@@ -85,15 +85,7 @@ class AStartSearchNode(Node):
             CmdMsg, "jetauto_car/cmd_msg", self.send_command
         )
 
-        self.get_logger().info(f"AStartpath_searchNode started...")
         self.setup()
-
-        self.robot_ctrl = RobotController2()
-
-        # _path_finder = path_location.PathFinder(
-        #     self, algorithm="a-start", dest_pos=(0, 2)
-        # )
-        # self.robot_ctrl = car_drive.RobotController(self, _path_finder, common.Orient.X)
 
         self.get_logger().info(f"AStart_Path_Search_Mode has started...")
 
@@ -101,23 +93,26 @@ class AStartSearchNode(Node):
         self, loc_data: TwistStamped
     ) -> None:  # msg로부터 위치정보를 추출
         
-        parts.IMUData.update(data=loc_data)
-        if not grid_map:
-            return
-        
-        # 계획완료를 확인한다.
-        if not self.act_complete:
-            # 경로이탈여부를 확인한다.
+        IMUData.update(data=loc_data)
 
-            return
-        
         # 실행결과를 검증한다.
-
-        # 로봇 이동계획을 수립한다.
-        action_plan = self.robot_ctrl.make_plan()
+        if not grid_map or self.robot_ctrl.check_arrived:
+            return
         
-        # 로봇에 계획을 전달한다.
-        self.robot_ctrl.excute(action_plan)
+        # 로봇 이동계획을 수립한다.
+        # 다음 위치는 무엇이고 회전인지 직진인지 아니면 후진을 해야하는지를 판단해야함
+        # 계획이 세워지면, thread를 통해 추진하고 경과를 event를 통해 전달한다.
+        # 그러면 경과과정 중에는 무엇을 해야하나?
+        # IMU/lidar를 통해 장애물, 경로이탈, 동체수평 여부 체크를 한다.
+        if self.act_complete:
+            self.robot_ctrl.prepare()
+            action_plan = self.robot_ctrl.make_plan()
+            
+            # 로봇에 계획을 전달한다.
+            self.robot_ctrl.excute(action_plan)
+        else:
+            # 각종 체크 수행
+            pass
 
     # 로봇이 전방물체와 50cm이내 접근상태이면 True를 반환
     def _is_near(self) -> tuple[bool, tuple]:
@@ -169,9 +164,13 @@ class AStartSearchNode(Node):
         return False
 
     def setup(self) -> None:
-        self.nanoseconds = 0
         Observable.add_observer('node', o=self)
+        self.robot_ctrl = RobotController2()
+
+        self.nanoseconds = 0
         self.dest_pos = (0, 0)
+        self.act_complete = False
+
         self.get_logger().info("초기화 처리 완료")
 
     def send_command(self, request, response) -> None:

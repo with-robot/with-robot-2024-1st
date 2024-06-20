@@ -10,7 +10,7 @@ from auto_runner.lib.common import (
     Observable,
     Message,
     Observer,
-    threading,
+    Chainable
 )
 from auto_runner.lib.map import Map
 from auto_runner.lib.path_location import PathFinder
@@ -18,7 +18,6 @@ import math
 import time
 import asyncio
 
-stop_event = TypeVar("stop_event", bound=threading.Event)
 state: StateData = StateData(State.ROTATE_STOP, State.ROTATE_STOP)
 orient: StateData = StateData(Orient.X, Orient.X)
 
@@ -54,31 +53,38 @@ class IMUData(Observable):
         await cls.notifyall(Message(data_type=cls._subject, data=_data))
 
 
-class MoveAction(EvHandle, Observer):
-    imu_data: any = None
+class MoveAction(EvHandle, Observer, Chainable):
+    
+    def __init__(self, orient:Orient, cur_pos:tuple, paths:list[tuple]):
+        super().__init__()
+        self.orient = orient
+        self.cur_pos = cur_pos
+        self.paths = paths
+        self.next_pos = paths[1]
+        self.imu_data = None
+    
+    def setup(self, **kwargs):        
+        IMUData.add_observer(o=self)  
 
-    def __init__(self, stop_event: stop_event):
-        super().__init__(stop_event)
-        IMUData.add_observer(o=self)
-        self._stop_event = stop_event
+    def check_condition(self):
+        self.action = DirType.FORWARD, self.orient
+        (x0, y0), (x1, y1) = self.cur_pos, self.next_pos
 
-    def _init(self, **kwargs):
-        # 좌표변환 기능 tf -> (x,y)
-        self.next_pos = kwargs.get("dest_pos", (0, 0))
-        self.next_orient = kwargs.get("orient", Orient.X)
-        self.direction = (
-            1 if kwargs.get("direction", DirType.FORWARD) == DirType.FORWARD else -1
-        )
-
+        if self.orient in [Orient.X, Orient._X]:
+            return y0 != y1
+        elif orient in [Orient.Y, Orient._Y]:
+            return x0 != x1        
+        return False
+        
     def run(self):
         if state != State.ROTATE_STOP:
             # 회전중이라면 회전을 중지시킨다.
-            self._stop_event.set()
+            self.stop_event.set()
             time.sleep(0.3)
-            self._stop_event.clear()
+            self.stop_event.clear()
 
         state.shift(State.RUN)
-        while not self._stop_event.is_set():
+        while not self.stop_event.is_set():
             if not self.imu_data:
                 time.sleep(0.05)
                 continue
@@ -102,6 +108,7 @@ class MoveAction(EvHandle, Observer):
         self._notifyall("node", Message(title="완료", data_type="notify", data="move"))
 
         state.shift(State.ROTATE_STOP)
+        IMUData.remove_observer(o=self)
 
     # 수평상태
     def _adjust_body(self, orient: Orient, angle: float):
@@ -153,24 +160,55 @@ class MoveAction(EvHandle, Observer):
         return amend_theta
 
 
-class RotateAction(EvHandle, Observer):
+class RotateAction(EvHandle, Observer, Chainable):
     start_angle: float
     imu_data: any = None
 
-    def __init__(self, stop_event: stop_event, dir: DirType):
-        super().__init__(stop_event)
-        IMUData.add_observer(o=self)
-        self.stop_event = stop_event
-        self.dir: DirType = dir
+    def __init__(self, orient:Orient, cur_pos:tuple, paths:list[tuple]):
+        super().__init__()
+        self.orient = orient
+        self.cur_pos = cur_pos
+        self.paths = paths
+        self.next_pos = paths[1]
+        
+    def setup(self, **kwargs):        
+        IMUData.add_observer(o=self)    
 
-    def _init(self, **kwargs):
-        # 좌표변환 기능 tf -> (x,y)
-        # self.dir = kwargs.get("dir", (0, 0))
-        # self.orient = kwargs.get("orient", Orient.X)
-        # self.direction = (
-        #     1 if kwargs.get("direction", DirType.FORWARD) == "forward" else -1
-        # )
-        pass
+    def check_condition(self, orient:Orient, cur_pos:tuple, paths:list[tuple]):
+
+        (x0, y0), (x1, y1) = cur_pos, paths[1]
+
+        action = None
+        if orient == Orient.X:
+            if y1 > y0:
+                action = DirType.LEFT, Orient.Y  # 좌회전
+            elif y1 < y0:
+                action = DirType.RIGHT, Orient._Y  # 우회전
+
+        elif orient == Orient._X:
+            if y1 > y0:
+                action = DirType.RIGHT, Orient.Y  # 우회전
+            elif y1 < y0:
+                action = DirType.LEFT, Orient._Y  # 좌회전
+
+        elif orient == Orient.Y:
+            if x1 > x0:
+                action = DirType.RIGHT, Orient.X  # 우회전
+            elif x1 < x0:
+                action = DirType.LEFT, Orient._X  # 좌회전
+
+        elif orient == Orient._Y:
+            if x1 > x0:
+                action = DirType.LEFT, Orient.X  # 좌회전
+            elif x1 < x0:
+                action = DirType.RIGHT, Orient._X  # 우회전
+
+        if action is None:
+            return False
+
+        self.action = action
+        return True
+    
 
     def run(self):
         if state != State.ROTATE_STOP:
@@ -204,6 +242,7 @@ class RotateAction(EvHandle, Observer):
         self._notifyall("node", Message(data_type="notify", data=dict(name="rotate")))
 
         state.shift(State.ROTATE_STOP)
+        IMUData.remove_observer(o=self)
 
     # 목표 각도 설정
     def _get_target_angle(self, orient: Orient, dir: DirType) -> float:
@@ -233,101 +272,58 @@ class RotateAction(EvHandle, Observer):
             self.tf_data = message.data if self.tf_data == message.data else None
 
 
-class PolicyResult:
-    policy: "Policy"
-    is_done: bool
-    kwargs: dict
+class BackMoveAction(EvHandle, Observer, Chainable):
+    start_angle: float
+    imu_data: any = None
 
-    def __init__(self, policy: "Policy", apply_result: bool, kwargs: dict):
-        self.policy = policy
-        self.is_done = apply_result
-        self.kwargs = kwargs
+    def __init__(self):
+        super().__init__()
+        IMUData.add_observer(o=self)
+
+    def check_condition(self, orient:Orient, cur_pos:tuple, paths:list[tuple]):
+        (x0, y0), (x1, y1) = cur_pos, paths[1]
+        
+        _trap_map = {            
+            orient.Y: self.map[x0][y0-1],
+            orient._Y: self.map[x0][y0+1],
+            orient.X: self.map[x0-1][y0],
+            orient._X: self.map[x0+1][y0],
+        }
+        
+        return all( v>0 for k,v in _trap_map.pop(orient).items())        
+    
+# class PolicyResult:
+#     policy: "Policy"
+#     is_done: bool
+#     kwargs: dict
+
+#     def __init__(self, policy: "Policy", apply_result: bool, kwargs: dict):
+#         self.policy = policy
+#         self.is_done = apply_result
+#         self.kwargs = kwargs
 
 
 # 다음 처리방향을 세운다.
 class Policy:
-    apply_result: bool = False
-    apply_kwargs: dict = {}
 
-    def __init__(self, stop_event: any):
-        self.stop_event = stop_event
-
+    @property
+    def all_policies(self) -> list[Chainable]:
+        return [
+            RotateAction,
+            MoveAction,
+            BackMoveAction,
+        ]
     def setup(self, policy: PolicyType, **kwargs):
         if not hasattr(self, policy.value):
             raise Exception(f"Policy {policy} is not implemented.")
-        # factory pattern
+        # factory 패턴
         self.action: EvHandle = getattr(self, policy.value)(**kwargs)
 
-        # _action_map = {
-        #     PolicyType.ROTATE: self.rotate,
-        #     PolicyType.STRAIGHT: self.move_straight,
-        #     PolicyType.BACk: self.move_back,
-        # }
-
-        # self.policy_plan = _action_map.get(policy)
-        # self.rotate_manager = RotateAction(self.rcntrler.cmd, **kwargs)
-        # self.move_manager = MoveAction(self.rcntrler.cmd, **kwargs)
-
-    def apply(self, **kwargs):
-        # next action - orient, dir을 설정해야한다.
-        cur_orient = kwargs['cur_orient']
-        cur_pos = kwargs['cur_pos']
-        next_pos = kwargs['next_pos']
-        _action:tuple[DirType, Orient] = self.get_action(cur_orient=cur_orient, cur_pos=cur_pos, next_pos=next_pos)
-        
-        kwargs['next_dir'], kwargs['next_orient'] = _action
-
-        self.action.start_action(**kwargs)
-
-    def go_back(self, **kwargs):
-        return MoveAction(
-            stop_event=self.stop_event,
-            dest_pos=kwargs.get("dest_pos"),
-        )
-
-    def move(self, **kwargs) -> EvHandle:
-        return MoveAction(
-            stop_event=self.stop_event,
-            dest_pos=kwargs.get("dest_pos"),
-        )
-
-    def rotate(self, **kwargs) -> EvHandle:
-        return RotateAction(
-            stop_event=self.stop_event,
-            dir=kwargs.get("dir"),
-        )
-
-    def get_action(
-        self, cur_orient: Orient, cur_pos: tuple, next_pos: tuple
-    ) -> tuple:
-        next_action: tuple = None  # (dir, orient)
-
-        (x0, y0), (x1, y1) = cur_pos, next_pos
-        if cur_orient == Orient.X:
-            if y1 > y0:
-                next_action = DirType.LEFT, Orient.Y  # 좌회전
-            elif y1 < y0:
-                next_action = DirType.RIGHT, Orient._Y  # 우회전
-
-        elif cur_orient == Orient._X:
-            if y1 > y0:
-                next_action = DirType.RIGHT, Orient.Y  # 우회전
-            elif y1 < y0:
-                next_action = DirType.LEFT, Orient._Y  # 좌회전
-
-        elif cur_orient == Orient.Y:
-            if x1 > x0:
-                next_action = DirType.RIGHT, Orient.X  # 우회전
-            elif x1 < x0:
-                next_action = DirType.LEFT, Orient._X  # 좌회전
-
-        elif cur_orient == Orient._Y:
-            if x1 > x0:
-                next_action = DirType.LEFT, Orient.X  # 좌회전
-            elif x1 < x0:
-                next_action = DirType.RIGHT, Orient._X  # 우회전
-        return next_action
-
+    def check_paths(self, orient_state, cur_pos, paths:list[tuple]) -> EvHandle:
+        # 체인 패턴
+        for p in self.all_policies:
+            if p.check_condition(orient_state=orient_state, cur_pos=cur_pos, paths=paths):
+                return p
 
 class ObstacleManager:
     def __init__(self, node: MessageHandler, state_data: StateData):
