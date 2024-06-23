@@ -14,8 +14,8 @@ from auto_runner.lib.parts import *
 from auto_runner.lib.car_drive2 import RobotController2
 from auto_runner.lib.common import Message, Observable
 
-laser_scan: LaserScan = None
-grid_map: list[list[int]] = None
+# laser_scan: LaserScan = None
+# grid_map: list[list[int]] = None
 
 class GridMap(Node):
     def __init__(self) -> None:
@@ -28,15 +28,16 @@ class GridMap(Node):
         self.map_pub = self.create_subscription(
             OccupancyGrid,
             "/occ_grid_map",
-            self.receive_map,
-            10,
+            callback=self.receive_map,
+            callback_group=self._default_callback_group,
+            qos_profile=10,
         )
 
     def receive_map(self, map: OccupancyGrid):
-        global grid_map
+        # global grid_map
         raw_data = np.array(map.data, dtype=np.int8)
         grid_map = convert_map(raw_data)
-        MapData.update(data = grid_map)
+        MapData.publish_(data = grid_map)
 
 
 class LidarScanNode(Node):
@@ -51,15 +52,16 @@ class LidarScanNode(Node):
             LaserScan,
             "jetauto/scan",
             callback=self.scan_handler,
+            callback_group=self._default_callback_group,
             qos_profile=10,
         )
 
         self.get_logger().info(f"LidarScanNode started...")
 
     def scan_handler(self, msg: LaserScan):
-        global laser_scan
-        laser_scan = msg
-        LidarData.update_lidar(msg)
+        # global laser_scan
+        # laser_scan = msg
+        LidarData.publish_(data=msg)
 
 
 class AStartSearchNode(Node):
@@ -89,14 +91,24 @@ class AStartSearchNode(Node):
 
         self.get_logger().info(f"AStart_Path_Search_Mode has started...")
 
+
+    def setup(self) -> None:
+        Observable.subscribe(o=self.update, subject='node')
+        self.robot_ctrl = RobotController2(node=self)
+        self.act_complete = False
+
+        self.get_logger().info("초기화 처리 완료")
+
+
     def unity_tf_callback(
         self, loc_data: TwistStamped
     ) -> None:  # msg로부터 위치정보를 추출
         
-        IMUData.update(data=loc_data)
+        IMUData.publish_(data=loc_data)
 
         # 실행결과를 검증한다.
-        if not grid_map or self.robot_ctrl.check_arrived:
+        if self.robot_ctrl.check_arrived:
+            self.get_logger().info("Arrived at the destination.")
             return
         
         # 로봇 이동계획을 수립한다.
@@ -115,63 +127,53 @@ class AStartSearchNode(Node):
             pass
 
     # 로봇이 전방물체와 50cm이내 접근상태이면 True를 반환
-    def _is_near(self) -> tuple[bool, tuple]:
-        if laser_scan:
-            time = Time.from_msg(laser_scan.header.stamp)
-            # Run if only laser scan from simulation is updated
-            if time.nanoseconds > self.nanoseconds:
-                self.nanoseconds = time.nanoseconds
+    # def _is_near(self) -> tuple[bool, tuple]:
+    #     if laser_scan:
+    #         time = Time.from_msg(laser_scan.header.stamp)
+    #         # Run if only laser scan from simulation is updated
+    #         if time.nanoseconds > self.nanoseconds:
+    #             self.nanoseconds = time.nanoseconds
 
-                ### Driving ###
-                nearest_distance = 0.3  # 50cm
+    #             ### Driving ###
+    #             nearest_distance = 0.3  # 50cm
 
-                distance_map = {}
-                distance_map.update({0: min(laser_scan.ranges[0:8])})  # 우측
-                distance_map.update({1: min(laser_scan.ranges[8:16])})
-                distance_map.update({2: min(laser_scan.ranges[16:24])})
-                distance_map.update({3: min(laser_scan.ranges[24:28])})
+    #             distance_map = {}
+    #             distance_map.update({0: min(laser_scan.ranges[0:8])})  # 우측
+    #             distance_map.update({1: min(laser_scan.ranges[8:16])})
+    #             distance_map.update({2: min(laser_scan.ranges[16:24])})
+    #             distance_map.update({3: min(laser_scan.ranges[24:28])})
 
-                distance_map.update({4: min(laser_scan.ranges[28:37])})  # 중앙
+    #             distance_map.update({4: min(laser_scan.ranges[28:37])})  # 중앙
 
-                distance_map.update({5: min(laser_scan.ranges[37:41])})  # 좌측
-                distance_map.update({6: min(laser_scan.ranges[41:49])})
-                distance_map.update({7: min(laser_scan.ranges[49:57])})
-                distance_map.update({8: min(laser_scan.ranges[57:65])})
+    #             distance_map.update({5: min(laser_scan.ranges[37:41])})  # 좌측
+    #             distance_map.update({6: min(laser_scan.ranges[41:49])})
+    #             distance_map.update({7: min(laser_scan.ranges[49:57])})
+    #             distance_map.update({8: min(laser_scan.ranges[57:65])})
 
-                min_distance = distance_map.get(4)
-                # map에서 value로 index를 찾는다.
-                torq_map = {
-                    2: -0.2,
-                    3: -0.5,
-                    4: -0.6,
-                    5: -0.5,
-                    6: -0.2,
-                }
-                min_index = next(
-                    key for key, value in distance_map.items() if value == min_distance
-                )
-                angle = -1.0 if min_index < 4 else 0.0 if min_index == 4 else 1.0
-                torque = torq_map.get(min_index, 0.0)
+    #             min_distance = distance_map.get(4)
+    #             # map에서 value로 index를 찾는다.
+    #             torq_map = {
+    #                 2: -0.2,
+    #                 3: -0.5,
+    #                 4: -0.6,
+    #                 5: -0.5,
+    #                 6: -0.2,
+    #             }
+    #             min_index = next(
+    #                 key for key, value in distance_map.items() if value == min_distance
+    #             )
+    #             angle = -1.0 if min_index < 4 else 0.0 if min_index == 4 else 1.0
+    #             torque = torq_map.get(min_index, 0.0)
 
-                self.state_near = (torque, angle)
+    #             self.state_near = (torque, angle)
 
-                self.get_logger().info(
-                    f"distances:{min_distance}/기준:{nearest_distance}"
-                )
-                self.get_logger().info(f"index:{min_index}, T/A: {torque}/{angle}")
-                return min_distance <= nearest_distance
+    #             self.get_logger().info(
+    #                 f"distances:{min_distance}/기준:{nearest_distance}"
+    #             )
+    #             self.get_logger().info(f"index:{min_index}, T/A: {torque}/{angle}")
+    #             return min_distance <= nearest_distance
 
-        return False
-
-    def setup(self) -> None:
-        Observable.add_observer('node', o=self)
-        self.robot_ctrl = RobotController2()
-
-        self.nanoseconds = 0
-        self.dest_pos = (0, 0)
-        self.act_complete = False
-
-        self.get_logger().info("초기화 처리 완료")
+    #     return False
 
     def send_command(self, request, response) -> None:
         self.get_logger().info(f"request: {request}")
@@ -201,12 +203,18 @@ class AStartSearchNode(Node):
         self.get_logger().info(message)
     
     def update(self, message: Message):
+         
         if message.data_type == "command":
             self._send_message(
                 title=message.data.get('name'), x=message.data['torque'], theta=message.data['theta'])            
+            self.print_log(f'data_type: {message.data_type}, data: {message.data}')
+
         elif message.data_type == "notify":
             self.act_complete = True
-            self.print_log(message.data+' completed')
+            self.print_log(f'data_type: {message.data_type}, data: act_complete')
+            
+        elif message.data_type == 'log':
+            self.print_log(message.data)
 
 def main(args=None):
     rclpy.init(args=args)

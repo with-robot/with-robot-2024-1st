@@ -4,7 +4,7 @@ import math
 from auto_runner.lib.common import Message, Observable
 
 def print_log(log:str):
-        Observable.notifyall('node', Message(data_type='log', data=log))
+    Observable.notifyall('node', Message(data_type='log', data=log))
 
 def euclidean_distance(a, b):
     return np.linalg.norm(a - b)

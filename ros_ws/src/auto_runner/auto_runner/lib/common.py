@@ -6,6 +6,8 @@ import asyncio
 from typing import TypeVar
 
 stop_event = TypeVar("stop_event", bound=threading.Event)
+
+
 class Orient(Enum):
     X = "x"
     _X = "-x"
@@ -63,38 +65,42 @@ class StateData:
     def shift(self, new_data):
         self.old = self.cur
         self.cur = new_data
-    
+
     def __eq__(self, __o: object) -> bool:
         return self.cur == __o
-    
+
     def __repr__(self) -> str:
         return f"[cur:{self.cur}, old:{self.old}]"
 
 
 @dataclass(slots=True, kw_only=True)
 class Message:
-    title:str
+    title: str = None
     data_type: str
-    data: dict | list | any
+    data: dict
+
 
 class Chainable(ABCMeta):
     @abstractmethod
-    def check_condition(self, orient_state:StateData, cur_pos:tuple, paths:list[tuple]):
-        ''''''
+    def check_condition(
+        self, orient_state: StateData, cur_pos: tuple, paths: list[tuple]
+    ):
+        """"""
+
 
 class Observer(ABCMeta):
     @abstractmethod
-    def update(self, data: any):
+    def update(self, message: Message):
         """"""
 
 
 class Observable:
     _observe_map: dict[str, list[Observer]] = {}
-    _subject: str =""
+    _subject: str = ""
 
     # 비동기로 callback
     @classmethod
-    def add_observer(cls, o: Observer, subject: str = None):
+    def subscribe(cls, o: Observer, subject: str = None):
         """주제를 구독한다"""
         subject = subject or cls._subject
         if subject not in cls._observe_map:
@@ -102,32 +108,30 @@ class Observable:
         cls._observe_map[subject].append(o)
 
     @classmethod
-    def remove_observer(cls, o: Observer, subject: str = None):
+    def unsubscribe(cls, o: Observer, subject: str = None):
         """주제 구독을 해제한다"""
         subject = subject or cls._subject
         if subject in cls._observe_map:
             cls._observe_map[subject].remove(o)
 
     @classmethod
-    async def notifyall(cls, message: Message, subject: str = None):
+    def publish_(cls, data: object):
+        cls.publish(Message(data_type=cls._subject, data=data), cls._subject)
+
+    @classmethod
+    def publish(cls, message: Message, subject: str):
         """주제를 모든 구독자에게 전달한다."""
         subject = subject or cls._subject
         for o in cls._observe_map.get(subject, []):
             if callable(o):
-                await o(message)
-            else:
-                await o.update(message)
-
-    @classmethod
-    async def update(cls, data: object):
-        await cls.notifyall(Message(data_type=cls._subject, data=data))
-
-    def dict(self):
-        return dict(name=self.name, callback=self.callback)
+                o(message)
+            elif isinstance(o, Observer):
+                o.update(message)
 
 
 class EvHandle(ABCMeta, threading.Thread):
     _lock = threading.Lock()
+    action: tuple = (DirType.FORWARD, Orient.X)
 
     def __init__(self):
         super().__init__()
@@ -142,14 +146,15 @@ class EvHandle(ABCMeta, threading.Thread):
     def setup(self, **kwargs):
         """"""
 
-    def _notifyall(self, subject:str, message:Message):        
-        async def create_task():
-            task = asyncio.create_task(
-                Observable.notifyall(
-                    subject, message
-                )
-            )
-            await asyncio.sleep(0)
-            return task
-        
-        asyncio.get_event_loop().run_until_complete(create_task())
+    def _notifyall(self, subject: str, message: Message):
+        # async def create_task():
+        #     task = asyncio.create_task(
+        #         Observable.publish(
+        #             subject, message
+        #         )
+        #     )
+        #     await asyncio.sleep(0)
+        #     return task
+
+        # asyncio.get_event_loop().run_until_complete(create_task())
+        Observable.publish(subject, message)

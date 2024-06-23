@@ -83,7 +83,7 @@ class AStartSearchNode(Node):
         )
 
         self.robot_ctrl = car_drive.RobotController(node=self, dir=common.Orient.X)
-        
+
         self.setup()
 
         self.get_logger().info(f"AStart_Path_Search_Mode has started...")
@@ -104,8 +104,9 @@ class AStartSearchNode(Node):
         is_near = self._is_near()
         if is_near:
             # 급 감속
-            action = self.state_near
-            self._send_message(title="근접 후진", x=action[0], theta=action[1])
+            self._send_message(
+                title="근접 후진", x=self.action_near[0], theta=self.action_near[1]
+            )
             return
 
         if self.robot_ctrl.check_rotate_state():
@@ -137,7 +138,7 @@ class AStartSearchNode(Node):
                 self.nanoseconds = time.nanoseconds
 
                 ### Driving ###
-                nearest_distance = 0.3  # 50cm
+                nearest_distance = 0.25  # 50cm
 
                 distance_map = {}
                 distance_map.update({0: min(laser_scan.ranges[0:8])})  # 우측
@@ -156,9 +157,9 @@ class AStartSearchNode(Node):
                 # map에서 value로 index를 찾는다.
                 torq_map = {
                     2: -0.2,
-                    3: -0.5,
-                    4: -0.6,
-                    5: -0.5,
+                    3: -0.4,
+                    4: -0.5,
+                    5: -0.4,
                     6: -0.2,
                 }
                 min_index = next(
@@ -167,7 +168,7 @@ class AStartSearchNode(Node):
                 angle = -1.0 if min_index < 4 else 0.0 if min_index == 4 else 1.0
                 torque = torq_map.get(min_index, 0.0)
 
-                self.state_near = (torque, angle)
+                self.action_near = (torque, angle)
 
                 self.get_logger().info(
                     f"distances:{min_distance}/기준:{nearest_distance}"

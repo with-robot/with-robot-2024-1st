@@ -17,7 +17,7 @@ class RobotController:
     # 직진토크
     rotate_torque = 0.3
     rot_angle_ccw = 1.3  # 0.85 * math.pi / 2.0 => 76도
-    fwd_torque = 0.5
+    fwd_torque = 0.4
 
     # x,y좌표 (x는 전후, y는 좌우)
     dir_data: StateData
@@ -28,7 +28,7 @@ class RobotController:
     def __init__(self, node: LoggableNode, dir: Orient = Orient.X) -> None:
         self.node = node
         self.dir_data = StateData(dir, dir)
-        self.path_finder = PathFinder(algorithm="a-start", dest_pos=(0, 2))
+        self.path_finder = PathFinder(node=node, algorithm="a-start", dest_pos=(0, 2))
         self.angular_data = StateData(0.0, 0.0)
         self.pos_data = StateData((0, 0), (0, 0))
         self.state_data = StateData(State.ROTATE_STOP, State.ROTATE_STOP)
@@ -251,7 +251,7 @@ class RobotController:
 
         # 간격을 두어 보정한다.
         # 잦은 조정에의한 좌우 흔들림 방지.
-        if abs(amend_theta) > 3 / 180 * math.pi:
+        if abs(amend_theta) > 1 / 180 * math.pi:
             self.node.print_log(
                 f"[{self.dir_data.cur} 위치보정] {self.dir_data} >> 보정 각:{amend_theta} / 기준:{3 / 180 * math.pi}"
             )

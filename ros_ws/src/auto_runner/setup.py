@@ -10,7 +10,7 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
-        ("share/" + package_name + "/launch", glob("launch/*.launch.py")),
+        ("share/" + package_name + "/launch", glob("launch/*.launch*.py")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -22,6 +22,7 @@ setup(
     entry_points={
         "console_scripts": [
             f"runner = {package_name}.runner:main",
+            f"runner2 = {package_name}.runner2:main",
         ],
     },
 )

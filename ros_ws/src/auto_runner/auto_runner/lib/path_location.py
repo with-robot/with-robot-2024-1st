@@ -1,16 +1,12 @@
 from collections import deque
-from auto_runner.lib.common import Orient, MessageHandler, TypeVar, Sequence
+from auto_runner.lib.common import Orient, MessageHandler, TypeVar
 from auto_runner import mmr_sampling
-from auto_runner.lib.map import Map
 import re, math
 
 LoggableNode = TypeVar("LoggableNode", bound=MessageHandler)
 
-
 class PathFinder:
     """맵과 위치정보에 대한 책임을 갖는다"""
-
-    # grid_map: list[Sequence[int]]
 
     def __init__(
         self,
@@ -20,7 +16,6 @@ class PathFinder:
     ) -> None:
         self.node = node
         self.is_found = False
-        self.grid_map:Map = Map()
         self.paths = []
         self.algorithm = algorithm
         self.cur_pos = None
@@ -32,8 +27,8 @@ class PathFinder:
         else:
             return []
 
-    def update_map(self, map: list[Sequence[int]]) -> None:
-        self.grid_map.data = map
+    def update_map(self, map: list[tuple[int,int]]) -> None:
+        self.grid_map = map
 
     # 도착위치이면 새로운 도착위치를 반환한다.
     def check_arrival(self, cur_dir, new_pos: None, finish: bool = False) -> bool:
@@ -73,11 +68,11 @@ class PathFinder:
                 dest_pos = _original_dest
             else:
                 dest_pos = mmr_sampling.find_farthest_coordinate(
-                    self.grid_map.data, self.cur_pos, exclude, self.node.print_log
+                    self.grid_map, self.cur_pos, exclude
                 )
                 self.node.print_log(f"mmr_sampling performed: dest_pos:{dest_pos}")
                 if not dest_pos:
-                    self.node.print_log(f"mmr_sampling failed: map:{self.grid_map.data}")
+                    self.node.print_log(f"mmr_sampling failed: map:{self.grid_map}")
 
             if not dest_pos:
                 return []
@@ -95,15 +90,7 @@ class PathFinder:
 
     def set_cur_pos(self, pos: tuple[float, float]) -> tuple:
         self.cur_pos = self._transfer2_xy(pos)
-        self.grid_map.update_pos(pos)
         return self.cur_pos
-
-    # 트랩상태인지 map을 통해 확인
-    def is_intrap(self) -> bool:
-        return self.grid_map.is_intrap(self.cur_pos)
-
-    def back_path(self) -> list[tuple]:
-        return self.grid_map.get_back_path()
 
     # 다음위치에서 전 경로를 제거, 이 다음 경로를 반환한다.
     def get_next_pos(self):        
@@ -116,7 +103,7 @@ class PathFinder:
         return self.paths[1]
 
     # 위치값을 맵좌표로 변환
-    def _transfer2_xy(self, pose: Sequence[float, float]) -> tuple[int, int]:
+    def _transfer2_xy(self, pose: tuple[float, float]) -> tuple[int, int]:
         # PC 맵 좌표를 SLAM 맵 좌표로 변환
         _x = math.floor(5.0 + pose[0])  # x
         _y = math.floor(5.0 + pose[1])  # y
@@ -128,7 +115,7 @@ class PathFinder:
     # a* method
     def _astar_method(
         self, start: tuple[int, int], goal: tuple[int, int], init_dir: Orient = Orient.X
-    ) -> list[Sequence[int]]:
+    ) -> list[tuple[int,int]]:
         """
         A* 알고리즘을 사용하여 최단 경로를 찾습니다.
         :param grid: 2D 그리드 맵
@@ -136,8 +123,8 @@ class PathFinder:
         :param goal: 목표 지점 (x, y)
         :return: 최단 경로
         """
-        self.node.print_log(f"cur_pos: {start}, goal: {goal}, map:{len(self.grid_map.data)}")
-        grid_map = self.grid_map.data
+        self.node.print_log(f"cur_pos: {start}, goal: {goal}, map:{len(self.grid_map)}")
+        grid_map = self.grid_map
 
         if not grid_map:
             return []
