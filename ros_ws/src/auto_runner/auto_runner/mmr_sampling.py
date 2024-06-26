@@ -3,8 +3,8 @@ import random
 import math
 from auto_runner.lib.common import Message, Observable
 
-def print_log(log:str):
-    Observable.notifyall('node', Message(data_type='log', data=log))
+def print_log(message:str, class_:str=None):
+    Observable.publish(Message(pos=class_, data_type='log', data=message), subject='node')
 
 def euclidean_distance(a, b):
     return np.linalg.norm(a - b)

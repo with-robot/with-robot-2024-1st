@@ -95,7 +95,7 @@ class AStartSearchNode(Node):
     def setup(self) -> None:
         Observable.subscribe(o=self.update, subject='node')
         self.robot_ctrl = RobotController2(node=self)
-        self.act_complete = False
+        self.act_complete = True
 
         self.get_logger().info("초기화 처리 완료")
 
@@ -122,6 +122,7 @@ class AStartSearchNode(Node):
             
             # 로봇에 계획을 전달한다.
             self.robot_ctrl.excute(action_plan)
+            self.act_complete = False
         else:
             # 각종 체크 수행
             pass
@@ -203,18 +204,18 @@ class AStartSearchNode(Node):
         self.get_logger().info(message)
     
     def update(self, message: Message):
+        self.print_log(f'data_type: {message.data_type}, data: {message.data}')
          
-        if message.data_type == "command":
+        if message.data_type == "command":        
             self._send_message(
-                title=message.data.get('name'), x=message.data['torque'], theta=message.data['theta'])            
-            self.print_log(f'data_type: {message.data_type}, data: {message.data}')
+                title=message.data.get('name'), x=float(message.data['torque']), theta=float(message.data['theta']))
 
         elif message.data_type == "notify":
             self.act_complete = True
-            self.print_log(f'data_type: {message.data_type}, data: act_complete')
+            # self.print_log(f'data_type: {message.data_type}, data: act_complete')
             
-        elif message.data_type == 'log':
-            self.print_log(message.data)
+        # elif message.data_type == 'log':
+        #     self.print_log(message.data)
 
 def main(args=None):
     rclpy.init(args=args)

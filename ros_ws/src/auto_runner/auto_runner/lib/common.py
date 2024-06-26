@@ -2,10 +2,11 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from enum import Enum, auto
 import threading
-import asyncio
 from typing import TypeVar
+import time
 
-stop_event = TypeVar("stop_event", bound=threading.Event)
+# stop_event = TypeVar("stop_event", bound=threading.Event)
+stop_event = threading.Event()
 
 
 class Orient(Enum):
@@ -75,23 +76,30 @@ class StateData:
 
 @dataclass(slots=True, kw_only=True)
 class Message:
+    pos: str = None
     title: str = None
     data_type: str
     data: dict
 
 
-class Chainable(ABCMeta):
+class Chainable:
     @abstractmethod
-    def check_condition(
-        self, orient_state: StateData, cur_pos: tuple, paths: list[tuple]
-    ):
+    def check_condition(self):
         """"""
 
 
-class Observer(ABCMeta):
-    @abstractmethod
+class Observer:
+    data_arrival: bool = False
+
+    def get_data(self):
+        while not self.data_arrival:
+            time.sleep(0.05)
+        self.data_arrival = False
+        return self.data
+
     def update(self, message: Message):
-        """"""
+        self.data = message
+        self.data_arrival = True
 
 
 class Observable:
@@ -129,7 +137,7 @@ class Observable:
                 o.update(message)
 
 
-class EvHandle(ABCMeta, threading.Thread):
+class EvHandle(threading.Thread):
     _lock = threading.Lock()
     action: tuple = (DirType.FORWARD, Orient.X)
 
@@ -157,4 +165,4 @@ class EvHandle(ABCMeta, threading.Thread):
         #     return task
 
         # asyncio.get_event_loop().run_until_complete(create_task())
-        Observable.publish(subject, message)
+        Observable.publish(message, subject)

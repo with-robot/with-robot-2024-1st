@@ -31,7 +31,7 @@ class RobotController2:
     def prepare(self):
         # 방향, 현재위치, 회전각도 등 취합
         self.cur_pos: tuple = self.pathMnger.transfer2_xy(self.imu_data[:2])
-        self.angular_data: float = self.get_data[2]
+        self.angular_data: float = self.imu_data[2]
         print_log(f"<<prepare>> {self.cur_pos} : {self.angular_data}")
         # 목표경로를 정한다.
         self.path = self.pathMnger.search_new_path(self.cur_pos, self.orient)
@@ -39,13 +39,12 @@ class RobotController2:
     def make_plan(self) -> Policy:
         """후진, 회전, 직진여부를 체크하고 해당 policy를 반환한다"""
         policy: EvHandle = Policy.check_paths(self.orient, self.cur_pos, self.path)
-        self.dir_type, self.origin = policy.action
-
         print_log(f"<<make_plan>> policy {policy} :action {policy.action}")
         return policy
 
     def excute(self, next_plan: EvHandle, **kwargs):
         print_log(f"<<excute>> {next_plan}")
+        self.dir_type, self.origin = next_plan.action
         next_plan.apply(**kwargs)
 
     @property
