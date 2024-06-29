@@ -1,12 +1,11 @@
 from rclpy.node import Node
-from auto_runner.lib.common import TypeVar
+from auto_runner.lib.common import TypeVar, SearchEndException
 from auto_runner.lib.parts import *
 from auto_runner import mmr_sampling
 from auto_runner.lib.path_manage import PathManage
 
 LoggableNode = TypeVar("LoggableNode", bound=MessageHandler)
 print_log = mmr_sampling.print_log
-
 
 class RobotController2:
     action_map = {
@@ -22,9 +21,10 @@ class RobotController2:
         self.orient: Orient = Orient.X
         self.cur_pos = (0,0)
         self.path = [(-1,-1)]
-        IMUData.subscribe(o=self.get_data)
+        self.dest_pos = None
+        IMUData.subscribe(o=self.get_msg)
 
-    def get_data(self, message: Message):
+    def get_msg(self, message: Message):
         self.imu_data = message.data
 
     def prepare(self):
@@ -32,20 +32,30 @@ class RobotController2:
         self.cur_pos: tuple = self.pathMnger.transfer2_xy(self.imu_data[:2])
         self.angular_data: float = self.imu_data[2]
         print_log(f"<<prepare>> {self.cur_pos} : {self.angular_data}")
-        # 목표경로를 정한다.
-        self.path = self.pathMnger.search_new_path(self.cur_pos, self.orient)
+
+        # 목표경로를 정한다.        
+        if not self.dest_pos or self.cur_pos == self.dest_pos or self.cur_pos not in self.path:
+            self.path = self.pathMnger.search_new_path(self.cur_pos, self.orient)
+            if not self.path:
+                raise SearchEndException("No path found")
+            self.dest_pos = self.path[-1]
+        else:
+            cur_ix = self.path.index(self.cur_pos)
+            self.path = self.path[cur_ix:]
+        return True
 
     def make_plan(self) -> Policy:
         """후진, 회전, 직진여부를 체크하고 해당 policy를 반환한다"""
         policy: EvHandle = Policy.search_action(self.orient, self.cur_pos, self.path)
-        print_log(f"<<make_plan>> policy {policy} :action {policy.action}")
+        print_log(f"<<make_plan>> {policy=} :{policy.action=}")
         return policy
 
     def excute(self, next_plan: EvHandle, **kwargs):
         print_log(f"<<excute>> {next_plan}")
-        _, self.origin = next_plan.action
+        _, self.orient = next_plan.action
         next_plan.apply(**kwargs)
 
     @property
     def check_arrived(self):
-        return self.cur_pos == self.path[-1]
+        cur_pos: tuple = self.pathMnger.transfer2_xy(self.imu_data[:2])
+        return cur_pos == self.dest_pos

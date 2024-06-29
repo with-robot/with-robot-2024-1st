@@ -82,18 +82,20 @@ class MoveAction(EvHandle, Observer, Chainable):
 
         if output == True:
             self.action = DirType.FORWARD, orient
-            self.torque = 1.0
+            self.torque = 0.5
 
-            for index, pos in enumerate(path, start=1):
+            ix = len(path)-1
+            for index, pos in enumerate(path[1:], start=1):
                 if orient in [Orient.X, Orient._X]:
                     if pos[1] != y0:
+                        ix = index-1
                         break
                 elif orient in [Orient.Y, Orient._Y]:
                     if pos[0] != x0:
+                        ix = index-1
                         break
-            else:
-                # 회전 직적까지 후진
-                self.next_pos = path[index - 1]
+            # 회전 직적까지 후진
+            self.next_pos = path[ix]
 
         return output
 
@@ -106,7 +108,7 @@ class MoveAction(EvHandle, Observer, Chainable):
 
         state.shift(State.RUN)
         while not stop_event.is_set():
-            imu_data = self.get_data().data
+            imu_data = self.get_msg().data
 
             with self._lock:
                 _xy = imu_data[:2]
@@ -128,16 +130,18 @@ class MoveAction(EvHandle, Observer, Chainable):
                         data=dict(torque=self.torque, theta=amend_theta),
                     ),
                 )
-        
-        # self._notifyall(
-        #             "node",
-        #             Message(
-        #                 title="move",
-        #                 data_type="command",
-        #                 data=dict(torque=-self.torque*0.3, theta=0),
-        #             ),
-        #         )
-        self._notifyall("node", Message(title="공지", data_type="notify", data="Move 완료"))
+
+        self._notifyall(
+                    "node",
+                    Message(
+                        title="move",
+                        data_type="command",
+                        data=dict(torque=0, theta=0),
+                    ),
+                )
+        self._notifyall(
+            "node", Message(title="공지", data_type="notify", data="Move 완료")
+        )
 
         state.shift(State.STOP)
         IMUData.unsubscribe(o=self)
@@ -245,17 +249,17 @@ class RotateAction(EvHandle, Observer, Chainable):
         state.shift(State.ROTATE_START)
 
         while not stop_event.is_set():
-            imu_data = self.get_data().data
+            imu_data = self.get_msg().data
 
             with self._lock:
                 _fr_angle = imu_data[-1]
-                _to_angle = self._get_target_angle()                
+                _to_angle = self._get_target_angle()
 
                 # 회전각 계산
                 angle_diff: float = self._get_diff(_fr_angle, _to_angle)
 
                 # 회전완료 여부 체크
-                if abs(angle_diff) < 0.2:
+                if abs(angle_diff) < 0.3:
                     break
 
                 sign_ = 1 if self.action[0] == DirType.LEFT else -1
@@ -275,20 +279,20 @@ class RotateAction(EvHandle, Observer, Chainable):
     # 목표 각도 설정
     def _get_target_angle(self) -> float:
         _angle_map = {
-            Orient.X: 2 * math.pi if self.action[0]==DirType.LEFT else 0,
+            Orient.X: 2 * math.pi if self.action[0] == DirType.LEFT else 0,
             Orient.Y: math.pi / 2,
             Orient._X: math.pi,
             Orient._Y: 3 * math.pi / 2,
         }
 
-        _key = self.action[1] # 다음 방향
+        _key = self.action[1]  # 다음 방향
         return _angle_map[_key] if _key in _angle_map else 2 * math.pi
 
     # 반환값은 보정될 방향을 고려하여 계산방향을 정함
     def _get_diff(self, angle: float, target_angle: float) -> float:
         cur_angle = angle % (2 * math.pi)
         # cur_angle = cur_angle if cur_angle > target_angle else (cur_angle + 2 * math.pi)
-        
+
         print_log(f"rotate: {cur_angle} : {target_angle}")
         return target_angle - cur_angle
 
@@ -356,7 +360,7 @@ class BackMoveAction(EvHandle, Observer, Chainable):
 
         state.shift(State.RUN)
         while not self.stop_event.is_set():
-            imu_data = self.get_data().data
+            imu_data = self.get_msg().data
 
             with self._lock:
                 _xy = imu_data[:2]
@@ -443,7 +447,9 @@ class Policy:
         self.action: EvHandle = getattr(self, policy.value)(**kwargs)
 
     @classmethod
-    def search_action(cls, orient: Orient, cur_pos: tuple, path: list[tuple]) -> EvHandle:
+    def search_action(
+        cls, orient: Orient, cur_pos: tuple, path: list[tuple]
+    ) -> EvHandle:
         print_log(f"search_action: {orient}, {cur_pos}, {path}")
         # 체인 패턴
         for p in [

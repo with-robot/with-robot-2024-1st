@@ -9,6 +9,10 @@ import time
 stop_event = threading.Event()
 
 
+class SearchEndException(Exception):
+    pass
+
+
 class Orient(Enum):
     X = "x"
     _X = "-x"
@@ -89,17 +93,17 @@ class Chainable:
 
 
 class Observer:
-    data_arrival: bool = False
-
-    def get_data(self):
-        while not self.data_arrival:
+    _msg_arrived: bool = False
+    _msg: Message = None
+    def get_msg(self):
+        while not self._msg_arrived:
             time.sleep(0.05)
-        self.data_arrival = False
-        return self.data
+        self._msg_arrived = False
+        return self._msg
 
     def update(self, message: Message):
-        self.data = message
-        self.data_arrival = True
+        self._msg = message
+        self._msg_arrived = True
 
 
 class Observable:

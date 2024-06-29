@@ -6,9 +6,8 @@ from auto_runner.lib.common import Message, Observable
 def print_log(message:str, class_:str=None):
     Observable.publish(Message(pos=class_, data_type='log', data=message), subject='node')
 
-def euclidean_distance(a, b):
-    return np.linalg.norm(a - b)
-
+def euclidean_distance(a:tuple, b:tuple):
+    return np.linalg.norm(np.array(a) - np.array(b))
 
 def find_farthest_coordinate(map: list, base: tuple, exclude:list[tuple]) -> tuple:
     
@@ -17,23 +16,17 @@ def find_farthest_coordinate(map: list, base: tuple, exclude:list[tuple]) -> tup
     cordinates = []
     for i in range(arr.shape[0]):
         for j in range(arr.shape[1]):
-            if (i, j) in exclude:
+            if any(euclidean_distance((i,j), pos) < 3 for pos in exclude):
                 continue
             if arr[i, j] == 0:
                 cordinates.append((i, j))
-    
-    # log(f"cordinates:{cordinates}, exclude:{exclude}")
-    # while True:
-    #     _choice = random.choice(cordinates)
-    #     if _choice != base:
-    #         x, y = _choice
-    #         break
     
     # 입력 좌표와 다른 좌표들 간의 거리를 계산
     x, y = base
     distances = []
     for cord in cordinates:
-        distance = math.sqrt((cord[0] - x) ** 2 + (cord[1] - y) ** 2)
+        # distance = math.sqrt((cord[0] - x) ** 2 + (cord[1] - y) ** 2)
+        distance = euclidean_distance(base, cord)
         distances.append((cord, distance))
 
     if len(distances) == 0:

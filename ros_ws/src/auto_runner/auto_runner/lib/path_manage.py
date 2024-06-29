@@ -13,24 +13,21 @@ class PathManage(Observer):
         from auto_runner.lib.parts import MapData
         self.path = []
         self.dest_pos = dest_pos
-        self.updated = False
+        self.visited = set()
         if algorithm == "a-star":
             self.pathfinder = self._astar_method
         MapData.subscribe(o=self)
-
-    @property
-    def all_path(self) -> list:
-        return self.path
 
     def search_new_path(self, cur_pos: tuple, cur_orient: Orient) -> tuple:
         print_log(f"<<check_and_dest>> pos:{cur_pos}, dir:{cur_orient}")
 
         path = []
-        count = 3
-        exclude = self.path if len(self.path) > 0 else [cur_pos]
+        count = 15
+        exclude = self.path if len(self.path) > 0 else list(cur_pos)
+        exclude.extend(self.visited)
 
         while len(path) == 0 and count > 0:
-            grid_map = self.get_data().data
+            grid_map = self.get_msg().data
 
             dest_pos = mmr_sampling.find_farthest_coordinate(
                 grid_map, cur_pos, exclude
@@ -48,10 +45,11 @@ class PathManage(Observer):
 
         if len(path) == 0:
             return []
-
+        
         self.dest_pos = dest_pos
         self.path = path
-        return path
+        self.visited.add(dest_pos)
+        return self.path
 
     # 위치값을 맵좌표로 변환
     @classmethod
@@ -78,7 +76,7 @@ class PathManage(Observer):
         :param goal: 목표 지점 (x, y)
         :return: 최단 경로
         """
-        grid_map = self.get_data().data
+        grid_map = self.get_msg().data
         print_log(
             f"cur_pos: {start}, goal: {goal}, map:{grid_map}"
         )
