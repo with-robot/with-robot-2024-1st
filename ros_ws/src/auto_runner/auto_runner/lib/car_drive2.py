@@ -20,7 +20,6 @@ class RobotController2:
         self.node = node
         self.pathMnger = PathManage(algorithm="a-star", dest_pos=(0, 0))
         self.orient: Orient = Orient.X
-        self.dir_type = DirType.FORWARD
         self.cur_pos = (0,0)
         self.path = [(-1,-1)]
         IMUData.subscribe(o=self.get_data)
@@ -38,13 +37,13 @@ class RobotController2:
 
     def make_plan(self) -> Policy:
         """후진, 회전, 직진여부를 체크하고 해당 policy를 반환한다"""
-        policy: EvHandle = Policy.check_paths(self.orient, self.cur_pos, self.path)
+        policy: EvHandle = Policy.search_action(self.orient, self.cur_pos, self.path)
         print_log(f"<<make_plan>> policy {policy} :action {policy.action}")
         return policy
 
     def excute(self, next_plan: EvHandle, **kwargs):
         print_log(f"<<excute>> {next_plan}")
-        self.dir_type, self.origin = next_plan.action
+        _, self.origin = next_plan.action
         next_plan.apply(**kwargs)
 
     @property

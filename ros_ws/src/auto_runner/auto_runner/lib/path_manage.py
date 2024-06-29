@@ -24,7 +24,6 @@ class PathManage(Observer):
 
     def search_new_path(self, cur_pos: tuple, cur_orient: Orient) -> tuple:
         print_log(f"<<check_and_dest>> pos:{cur_pos}, dir:{cur_orient}")
-        from time import perf_counter
 
         path = []
         count = 3

@@ -71,7 +71,7 @@ class MoveAction(EvHandle, Observer, Chainable):
     def check_condition(self):
         orient = self.orient
         cur_pos = self.cur_pos
-        # path = self.path
+        path = self.path
         (x0, y0), (x1, y1) = cur_pos, self.next_pos
         output: bool = False
 
@@ -83,14 +83,26 @@ class MoveAction(EvHandle, Observer, Chainable):
         if output == True:
             self.action = DirType.FORWARD, orient
             self.torque = 1.0
+
+            for index, pos in enumerate(path, start=1):
+                if orient in [Orient.X, Orient._X]:
+                    if pos[1] != y0:
+                        break
+                elif orient in [Orient.Y, Orient._Y]:
+                    if pos[0] != x0:
+                        break
+            else:
+                # 회전 직적까지 후진
+                self.next_pos = path[index - 1]
+
         return output
 
     def run(self):
         if state != State.ROTATE_STOP:
             # 회전중이라면 회전을 중지시킨다.
-            # stop_event.set()
+            stop_event.set()
             time.sleep(0.3)
-            # stop_event.clear()
+            stop_event.clear()
 
         state.shift(State.RUN)
         while not stop_event.is_set():
@@ -116,10 +128,18 @@ class MoveAction(EvHandle, Observer, Chainable):
                         data=dict(torque=self.torque, theta=amend_theta),
                     ),
                 )
+        
+        # self._notifyall(
+        #             "node",
+        #             Message(
+        #                 title="move",
+        #                 data_type="command",
+        #                 data=dict(torque=-self.torque*0.3, theta=0),
+        #             ),
+        #         )
+        self._notifyall("node", Message(title="공지", data_type="notify", data="Move 완료"))
 
-        self._notifyall("node", Message(title="완료", data_type="notify", data="move"))
-
-        state.shift(State.ROTATE_STOP)
+        state.shift(State.STOP)
         IMUData.unsubscribe(o=self)
 
     # 수평상태
@@ -136,7 +156,7 @@ class MoveAction(EvHandle, Observer, Chainable):
         else:
             amend_theta = 0.0
 
-        return amend_theta
+        return amend_theta * 0.8
 
     # 각도를 입력받아, 진행방향과 벗어난 각도를 반환한다.
     def _get_deviation_radian(self, orient: Orient, angle: float) -> float:
@@ -217,8 +237,10 @@ class RotateAction(EvHandle, Observer, Chainable):
         return True
 
     def run(self):
-        if state != State.ROTATE_STOP:
-            return
+        if state == State.ROTATE_START:
+            stop_event.set()
+            time.sleep(0.3)
+            stop_event.clear()
 
         state.shift(State.ROTATE_START)
 
@@ -227,8 +249,7 @@ class RotateAction(EvHandle, Observer, Chainable):
 
             with self._lock:
                 _fr_angle = imu_data[-1]
-                _to_angle = self._get_target_angle()
-                print_log(f"rotate: {_fr_angle} : {_to_angle}")
+                _to_angle = self._get_target_angle()                
 
                 # 회전각 계산
                 angle_diff: float = self._get_diff(_fr_angle, _to_angle)
@@ -237,12 +258,12 @@ class RotateAction(EvHandle, Observer, Chainable):
                 if abs(angle_diff) < 0.2:
                     break
 
-                # sign_ = math.copysign(1, angle_diff) * self.direction
+                sign_ = 1 if self.action[0] == DirType.LEFT else -1
                 self._notifyall(
                     "node",
                     Message(
                         data_type="command",
-                        data=dict(name="회전", torque=0.15, theta=angle_diff),
+                        data=dict(name="회전", torque=0.15, theta=sign_ * 1.35),
                     ),
                 )
 
@@ -254,21 +275,21 @@ class RotateAction(EvHandle, Observer, Chainable):
     # 목표 각도 설정
     def _get_target_angle(self) -> float:
         _angle_map = {
-            (DirType.LEFT, Orient.X): math.pi / 2,
-            (DirType.RIGHT, Orient._X): math.pi / 2,
-            (DirType.LEFT, Orient.Y): math.pi,
-            (DirType.RIGHT, Orient._Y): math.pi,
-            (DirType.RIGHT, Orient.X): 3 * math.pi / 2,
-            (DirType.LEFT, Orient._Y): 3 * math.pi / 2,
+            Orient.X: 2 * math.pi if self.action[0]==DirType.LEFT else 0,
+            Orient.Y: math.pi / 2,
+            Orient._X: math.pi,
+            Orient._Y: 3 * math.pi / 2,
         }
 
-        _key = self.action
+        _key = self.action[1] # 다음 방향
         return _angle_map[_key] if _key in _angle_map else 2 * math.pi
 
     # 반환값은 보정될 방향을 고려하여 계산방향을 정함
     def _get_diff(self, angle: float, target_angle: float) -> float:
         cur_angle = angle % (2 * math.pi)
-        cur_angle = cur_angle if cur_angle > target_angle else (cur_angle + 2 * math.pi)
+        # cur_angle = cur_angle if cur_angle > target_angle else (cur_angle + 2 * math.pi)
+        
+        print_log(f"rotate: {cur_angle} : {target_angle}")
         return target_angle - cur_angle
 
 
@@ -422,8 +443,8 @@ class Policy:
         self.action: EvHandle = getattr(self, policy.value)(**kwargs)
 
     @classmethod
-    def check_paths(cls, orient: Orient, cur_pos: tuple, path: list[tuple]) -> EvHandle:
-        print_log(f"check_paths: {orient}, {cur_pos}, {path}")
+    def search_action(cls, orient: Orient, cur_pos: tuple, path: list[tuple]) -> EvHandle:
+        print_log(f"search_action: {orient}, {cur_pos}, {path}")
         # 체인 패턴
         for p in [
             RotateAction,
