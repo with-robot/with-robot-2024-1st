@@ -88,9 +88,10 @@ class AStartSearchNode(Node):
 
     def setup(self) -> None:
         Observable.subscribe(o=self.update, subject='node')
-        LidarData.subscribe(o= self.laser_scan)
+        LidarData.subscribe(o=self.laser_scan)
         self.robot_ctrl = RobotController2(node=self)
         self.act_complete = True
+        self.nanoseconds = 0
 
         self.get_logger().info("초기화 처리 완료")
     
@@ -106,51 +107,52 @@ class AStartSearchNode(Node):
         # 로봇 이동계획을 수립한다.
         # 다음 위치는 무엇이고 회전인지 직진인지 아니면 후진을 해야하는지를 판단해야함
         # 계획이 세워지면, thread를 통해 추진하고 경과를 event를 통해 전달한다.
-        # 그러면 경과과정 중에는 무엇을 해야하나?
-        # IMU/lidar를 통해 장애물, 경로이탈, 동체수평 여부 체크를 한다.
         if self.act_complete:
             self.robot_ctrl.prepare()
             action_plan = self.robot_ctrl.make_plan()
             
             # 로봇에 계획을 전달한다.
-            self.robot_ctrl.excute(action_plan)
+            self.robot_ctrl.execute(action_plan)
             self.act_complete = False
                         
         else:
             # 각종 체크 수행
-            pass
+            # IMU/lidar를 통해 장애물, 경로이탈, 동체수평 여부 체크를 한다.
+            if self._is_near():
+                self._send_message(title='근접제어', x=self.state_near[0], theta=self.state_near[1])
 
     # 로봇이 전방물체와 50cm이내 접근상태이면 True를 반환
     def _is_near(self) -> tuple[bool, tuple]:
-        if self.laser_scan:
-            time = Time.from_msg(self.laser_scan.header.stamp)
+        lidar_msg = self.laser_scan.data
+        if lidar_msg:
+            time = Time.from_msg(lidar_msg.header.stamp)
             # Run if only laser scan from simulation is updated
             if time.nanoseconds > self.nanoseconds:
                 self.nanoseconds = time.nanoseconds
 
                 ### Driving ###
-                nearest_distance = 0.3  # 50cm
+                nearest_distance = 0.25  # 50cm
 
                 distance_map = {}
-                distance_map.update({0: min(self.laser_scan.ranges[0:8])})  # 우측
-                distance_map.update({1: min(self.laser_scan.ranges[8:16])})
-                distance_map.update({2: min(self.laser_scan.ranges[16:24])})
-                distance_map.update({3: min(self.laser_scan.ranges[24:28])})
+                distance_map.update({0: min(lidar_msg.ranges[0:8])})  # 우측
+                distance_map.update({1: min(lidar_msg.ranges[8:16])})
+                distance_map.update({2: min(lidar_msg.ranges[16:24])})
+                distance_map.update({3: min(lidar_msg.ranges[24:28])})
 
-                distance_map.update({4: min(self.laser_scan.ranges[28:37])})  # 중앙
+                distance_map.update({4: min(lidar_msg.ranges[28:37])})  # 중앙
 
-                distance_map.update({5: min(self.laser_scan.ranges[37:41])})  # 좌측
-                distance_map.update({6: min(self.laser_scan.ranges[41:49])})
-                distance_map.update({7: min(self.laser_scan.ranges[49:57])})
-                distance_map.update({8: min(self.laser_scan.ranges[57:65])})
+                distance_map.update({5: min(lidar_msg.ranges[37:41])})  # 좌측
+                distance_map.update({6: min(lidar_msg.ranges[41:49])})
+                distance_map.update({7: min(lidar_msg.ranges[49:57])})
+                distance_map.update({8: min(lidar_msg.ranges[57:65])})
 
                 min_distance = distance_map.get(4)
                 # map에서 value로 index를 찾는다.
                 torq_map = {
                     2: -0.2,
-                    3: -0.5,
-                    4: -0.6,
-                    5: -0.5,
+                    3: -0.25,
+                    4: -0.3,
+                    5: -0.25,
                     6: -0.2,
                 }
                 min_index = next(

@@ -21,16 +21,15 @@ def find_farthest_coordinate(map: list, base: tuple, exclude:list[tuple]) -> tup
             if arr[i, j] == 0:
                 cordinates.append((i, j))
     
+    if len(cordinates) == 0:
+        return random.choice(exclude)
+    
     # 입력 좌표와 다른 좌표들 간의 거리를 계산
-    x, y = base
     distances = []
     for cord in cordinates:
         # distance = math.sqrt((cord[0] - x) ** 2 + (cord[1] - y) ** 2)
         distance = euclidean_distance(base, cord)
         distances.append((cord, distance))
-
-    if len(distances) == 0:
-        return []
     
     # 거리가 가장 먼 좌표 찾기
     top_k = 3

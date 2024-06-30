@@ -144,7 +144,7 @@ public class CarController : MonoBehaviour
         inputs[6] = Input.GetKey(KeyCode.I) ? 1 : (Input.GetKey(KeyCode.K) ? -1 : 0);
     }
 
-    private bool ValidaeAction(float angle, float dir, float min, float max)
+    private bool ValidateAction(float angle, float dir, float min, float max)
     {
         if (angle > 180)
         {
@@ -182,23 +182,23 @@ public class CarController : MonoBehaviour
         UpdateWheel(colliderBR, viewBR);
 
         //
-        if (ValidaeAction(arm_link1.localEulerAngles.y - 90, inputs[2], -170, 170))
+        if (ValidateAction(arm_link1.localEulerAngles.y - 90, inputs[2], -170, 170))
         {
             arm_link1.Rotate(new Vector3(0, inputs[2], 0));
         }
-        if (ValidaeAction(arm_link2.localEulerAngles.z, inputs[3], -90, 90))
+        if (ValidateAction(arm_link2.localEulerAngles.z, inputs[3], -90, 90))
         {
             arm_link2.Rotate(new Vector3(0, 0, inputs[3]));
         }
-        if (ValidaeAction(arm_link3.localEulerAngles.z, inputs[4], -90, 90))
+        if (ValidateAction(arm_link3.localEulerAngles.z, inputs[4], -90, 90))
         {
             arm_link3.Rotate(new Vector3(0, 0, inputs[4]));
         }
-        if (ValidaeAction(arm_link4.localEulerAngles.z, inputs[5], -90, 90))
+        if (ValidateAction(arm_link4.localEulerAngles.z, inputs[5], -90, 90))
         {
             arm_link4.Rotate(new Vector3(0, 0, inputs[5]));
         }
-        if (ValidaeAction(l_in_link.localEulerAngles.x, inputs[6], 0, 90))
+        if (ValidateAction(l_in_link.localEulerAngles.x, inputs[6], 0, 90))
         {
             l_in_link.Rotate(new Vector3(inputs[6], 0, 0));
             l_link.Rotate(new Vector3(inputs[6], 0, 0));
@@ -206,7 +206,7 @@ public class CarController : MonoBehaviour
 
         }
 
-        if (ValidaeAction(-r_in_link.localEulerAngles.x, inputs[6], 0, 90))
+        if (ValidateAction(-r_in_link.localEulerAngles.x, inputs[6], 0, 90))
         {
             r_in_link.Rotate(new Vector3(-inputs[6], 0, 0));
             r_link.Rotate(new Vector3(-inputs[6], 0, 0));
@@ -231,7 +231,7 @@ public class CarController : MonoBehaviour
             return;
         }
         inputs[0] = Mathf.Min(Mathf.Max((float)-msg.angular.z, -1.8f), 1.8f);
-        inputs[1] = Mathf.Min(Mathf.Max((float)msg.linear.x, -1.0f), 1.0f);
+        inputs[1] = Mathf.Min(Mathf.Max((float)msg.linear.x, -3.0f), 3.0f);
 
         Debug.Log("angular.z: " + inputs[0] + ", torque.x:" + inputs[1]);
 

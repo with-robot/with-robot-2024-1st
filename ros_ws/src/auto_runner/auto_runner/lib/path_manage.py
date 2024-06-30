@@ -22,7 +22,7 @@ class PathManage(Observer):
         print_log(f"<<check_and_dest>> pos:{cur_pos}, dir:{cur_orient}")
 
         path = []
-        count = 15
+        count = 5
         exclude = self.path if len(self.path) > 0 else list(cur_pos)
         exclude.extend(self.visited)
 

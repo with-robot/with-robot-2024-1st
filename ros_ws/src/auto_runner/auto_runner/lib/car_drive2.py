@@ -50,8 +50,8 @@ class RobotController2:
         print_log(f"<<make_plan>> {policy=} :{policy.action=}")
         return policy
 
-    def excute(self, next_plan: EvHandle, **kwargs):
-        print_log(f"<<excute>> {next_plan}")
+    def execute(self, next_plan: EvHandle, **kwargs):
+        print_log(f"<<execute>> {next_plan}")
         _, self.orient = next_plan.action
         next_plan.apply(**kwargs)
 

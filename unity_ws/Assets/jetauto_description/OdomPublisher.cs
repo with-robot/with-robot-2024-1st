@@ -12,15 +12,15 @@ public class OdomPublisher : MonoBehaviour
     [SerializeField] private Transform jetauto;
 
     ROSConnection ros;
+    ROSConnection ros2;
     private float timeElapsed = 0.0f;
 
     private TwistStampedMsg tf;
-
     private void Start()
     {
         ros = ROSConnection.GetOrCreateInstance();
         ros.RegisterPublisher<TwistStampedMsg>(topicName);
-
+        
         tf = new TwistStampedMsg();
         tf.header.frame_id = "base_footprint";
     }
@@ -39,12 +39,15 @@ public class OdomPublisher : MonoBehaviour
                 sec = (int)now,
                 nanosec = (uint)((now - Math.Floor(now)) * Clock.k_NanoSecondsInSeconds)
             };
+            Rigidbody rb = GetComponent<Rigidbody>();
             // publish ros topic
-            tf.header.stamp = stamp;
+            tf.header.stamp = stamp;            
             tf.twist.linear.x = jetauto.position.z;
             tf.twist.linear.y = -jetauto.position.x;
-            tf.twist.linear.z = jetauto.position.y;
-            tf.twist.angular.x = jetauto.rotation.eulerAngles.z * Mathf.Deg2Rad;
+            // tf.twist.linear.z = jetauto.position.y;
+            tf.twist.linear.z = rb.velocity.x;
+            // tf.twist.angular.x = jetauto.rotation.eulerAngles.z * Mathf.Deg2Rad;
+            tf.twist.angular.x = -rb.angularVelocity.y;
             tf.twist.angular.y = jetauto.rotation.eulerAngles.x * Mathf.Deg2Rad;
             tf.twist.angular.z = -jetauto.rotation.eulerAngles.y * Mathf.Deg2Rad;
             ros.Publish(topicName, tf);

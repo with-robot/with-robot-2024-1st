@@ -33,10 +33,6 @@ class MapData(Observable):
     _subject = "map"
 
 
-class PosData(Observable):
-    _subject = "pos"
-
-
 class LidarData(Observable):
     _subject = "lidar"
 
@@ -63,6 +59,8 @@ class MoveAction(EvHandle, Observer, Chainable):
         self.path = path
         self.next_pos = path[1]
         self.data_arrival = False
+        self.integral_error = 0
+        self.previous_error = None
 
     def setup(self, **kwargs):
         self.imu_data = None
@@ -111,10 +109,11 @@ class MoveAction(EvHandle, Observer, Chainable):
             imu_data = self.get_msg().data
 
             with self._lock:
-                _xy = imu_data[:2]
-                print_log(f"cur: {_xy} : dest: {self.next_pos}")
+                self.cur_pos = PathManage.transfer2_xy(imu_data[:2])
+                print_log(f"cur: {self.cur_pos} : dest: {self.next_pos}")
+
                 # 도착 여부 체크
-                if PathManage.transfer2_xy(_xy) == self.next_pos:
+                if self.cur_pos == self.next_pos:
                     break
 
                 _angle = imu_data[-1]
@@ -127,24 +126,39 @@ class MoveAction(EvHandle, Observer, Chainable):
                     Message(
                         title="move",
                         data_type="command",
-                        data=dict(torque=self.torque, theta=amend_theta),
+                        data=dict(torque=self._torque_dynamics(), theta=amend_theta),
                     ),
                 )
 
-        self._notifyall(
-                    "node",
-                    Message(
-                        title="move",
-                        data_type="command",
-                        data=dict(torque=0, theta=0),
-                    ),
-                )
         self._notifyall(
             "node", Message(title="공지", data_type="notify", data="Move 완료")
         )
 
         state.shift(State.STOP)
         IMUData.unsubscribe(o=self)
+
+    # PID제어를통한 torque 계산
+    def _torque_dynamics(self) -> float:
+        # 에러정의
+        Kp, Ki, Kd = 0.2, 0.01, 0.5
+        max_integral = 1.0
+        error = math.sqrt( (self.next_pos[0] - self.cur_pos[0])**2 + (self.next_pos[1] - self.cur_pos[1])**2)
+        
+        self.integral_error = min(self.integral_error + error, max_integral)
+        
+        derivative_error = error - (self.previous_error if self.previous_error else 0)
+
+        self.previous_error = error
+
+        if error <= 1.0:
+            self.integral_error = 0  # 오차가 매우 작을 때 적분항 리셋
+
+        output = Kp * error + Ki * self.integral_error + Kd * derivative_error
+
+        print_log(f"dynamic torque = {output}: {error=}, {self.integral_error=}, {derivative_error=}")
+        return output
+
+
 
     # 수평상태
     def _adjust_body(self, orient: Orient, angle: float):
@@ -191,13 +205,19 @@ class MoveAction(EvHandle, Observer, Chainable):
 
 class RotateAction(EvHandle, Observer, Chainable):
     start_angle: float
-
+    
+    rotate_map = {
+        'basic': (0.3, 0.15),
+        'fast' : (0.4, 0.20)
+    }
     def __init__(self, orient: Orient, cur_pos: tuple, path: list[tuple]):
         super().__init__()
         self.orient = orient
         self.cur_pos = cur_pos
         self.path = path
         self.next_pos = path[1]
+        self.rotate_policy = self.rotate_map['fast']
+
 
     def setup(self, **kwargs):
         self.imu_data: list = None
@@ -245,7 +265,8 @@ class RotateAction(EvHandle, Observer, Chainable):
             stop_event.set()
             time.sleep(0.3)
             stop_event.clear()
-
+        
+        
         state.shift(State.ROTATE_START)
 
         while not stop_event.is_set():
@@ -259,7 +280,7 @@ class RotateAction(EvHandle, Observer, Chainable):
                 angle_diff: float = self._get_diff(_fr_angle, _to_angle)
 
                 # 회전완료 여부 체크
-                if abs(angle_diff) < 0.3:
+                if abs(angle_diff) < self.rotate_policy[0]:
                     break
 
                 sign_ = 1 if self.action[0] == DirType.LEFT else -1
@@ -267,7 +288,7 @@ class RotateAction(EvHandle, Observer, Chainable):
                     "node",
                     Message(
                         data_type="command",
-                        data=dict(name="회전", torque=0.15, theta=sign_ * 1.35),
+                        data=dict(name="회전", torque=self.rotate_policy[1], theta=sign_ * 1.35),
                     ),
                 )
 
