@@ -158,7 +158,7 @@ class AStartSearchNode(Node):
                 min_index = next(
                     key for key, value in distance_map.items() if value == min_distance
                 )
-                angle = -1.0 if min_index < 4 else 0.0 if min_index == 4 else 1.0
+                angle = -1.0 if min_index < 4 else -0.1 if min_index == 4 else 1.0
                 torque = torq_map.get(min_index, 0.0)
 
                 self.state_near = (torque, angle)

@@ -51,6 +51,13 @@ class PathManage(Observer):
         self.visited.add(dest_pos)
         return self.path
 
+    @classmethod
+    def transfer2_point(self, pose: tuple[int, int]) -> tuple[int, int]:
+        # PC 맵 좌표를 SLAM 맵 좌표로 변환
+        x = pose[0]-5.0+0.5  # _x
+        y = pose[1]-5.0+0.5  # _y
+        return (x, y)
+
     # 위치값을 맵좌표로 변환
     @classmethod
     def transfer2_xy(self, pose: tuple[float, float]) -> tuple[int, int]:

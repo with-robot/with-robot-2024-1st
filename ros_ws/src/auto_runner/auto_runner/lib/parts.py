@@ -126,7 +126,7 @@ class MoveAction(EvHandle, Observer, Chainable):
                     Message(
                         title="move",
                         data_type="command",
-                        data=dict(torque=self._torque_dynamics(), theta=amend_theta),
+                        data=dict(torque=self._pid_torque(imu_data[:2]), theta=amend_theta),
                     ),
                 )
 
@@ -138,15 +138,17 @@ class MoveAction(EvHandle, Observer, Chainable):
         IMUData.unsubscribe(o=self)
 
     # PID제어를통한 torque 계산
-    def _torque_dynamics(self) -> float:
+    def _pid_torque(self, cur_pos:tuple[float,float]) -> float:
         # 에러정의
-        Kp, Ki, Kd = 0.2, 0.01, 0.5
+        Kp, Ki, Kd, dt = 0.3, 0.03, 0.6, 3.0
         max_integral = 1.0
-        error = math.sqrt( (self.next_pos[0] - self.cur_pos[0])**2 + (self.next_pos[1] - self.cur_pos[1])**2)
+        next_pos = PathManage.transfer2_point(self.next_pos)
         
-        self.integral_error = min(self.integral_error + error, max_integral)
+        error = math.sqrt( (next_pos[0] - cur_pos[0])**2 + (next_pos[1] - cur_pos[1])**2)
         
-        derivative_error = error - (self.previous_error if self.previous_error else 0)
+        self.integral_error = min(self.integral_error + error, max_integral) / dt
+        
+        derivative_error = (error - (self.previous_error if self.previous_error else 0.0)) / dt
 
         self.previous_error = error
 

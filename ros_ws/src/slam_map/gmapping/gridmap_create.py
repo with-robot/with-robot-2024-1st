@@ -5,6 +5,7 @@ from rclpy.node import Node
 from rclpy.time import Time
 from ament_index_python.packages import get_package_share_directory
 from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import Image
 from geometry_msgs.msg import TwistStamped
 from nav_msgs.msg import OccupancyGrid
 import tf2_ros
@@ -20,7 +21,10 @@ class GridmapPubNode(Node):
 
         self.world_frame_id = world_frame_id
         self.occ_grid_pub = self.create_publisher(
-            OccupancyGrid, "/occ_grid_map", qos_profile=10
+            OccupancyGrid, "/occ_grid_map", qos_profile=1
+        )
+        self.occ_grid_map_img = self.create_publisher(
+            Image, "/occ_grid_map_img", qos_profile=1
         )
         self.create_subscription(
             TwistStamped,
@@ -40,6 +44,7 @@ class GridmapPubNode(Node):
         self.nanoseconds = 0
         self.gridmap = None
         self.odometry = None
+        self.image_msg = Image()
         
         self.prepare_log_file()
         self.get_logger().info(f"Gridmap node has started: {world_frame_id}")
@@ -200,17 +205,25 @@ class GridmapPubNode(Node):
         occ_grid.info.origin.orientation.z = 0.0
         occ_grid.info.origin.orientation.w = 1.0
         # map data is the occupancy grid map
-        occ_grid.data = reshaped_gridmap.astype(dtype=np.int8).tolist()
+        occ_grid.data = reshaped_gridmap.astype(dtype=np.int8).flatten().tolist()
 
         # Publishing the message
         self.occ_grid_pub.publish(occ_grid)
 
-        self.save_map(occ_grid.data)
+        self.save_map(occ_grid)
 
-    def save_map(self, data):
-        data_str=' '.join(str(x) for x in data)
+    def save_map(self, grid):
+        data_str=' '.join(str(x) for x in grid.data)
         with open(self.occ_map_file, "w") as f:
             f.write(data_str)
+
+        self.image_msg.data = bytes(grid.data)  # 데이터 타입 변환
+        self.image_msg.height = grid.info.height
+        self.image_msg.width = grid.info.width
+        self.image_msg.encoding = "mono8"  # 단일 채널 그레이스케일 이미지
+        self.image_msg.step = grid.info.width  # 너비만큼의 바이트 수
+
+        self.occ_grid_map_img.publish(self.image_msg)
 
 
 def main(args=None):
